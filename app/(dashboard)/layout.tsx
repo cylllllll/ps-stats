@@ -53,7 +53,7 @@ export default function DashboardLayout({
             <Link href="/dashboard" className="flex items-center gap-2 font-bold">
               <Gamepad2 className="h-5 w-5 text-primary" />
               <span className="hidden sm:inline bg-gradient-to-r from-primary to-blue-500 bg-clip-text text-transparent">
-                Steam Stats
+                PlayStation Stats
               </span>
             </Link>
 

@@ -76,7 +76,7 @@ export default function Home() {
                 </svg>
               </div>
             </div>
-            <span className="text-2xl font-bold text-neutral-900 tracking-tight">Steam Stats</span>
+            <span className="text-2xl font-bold text-neutral-900 tracking-tight">PlayStation Stats</span>
           </div>
 
           {/* Title */}
@@ -90,7 +90,7 @@ export default function Home() {
             </h1>
             
             <p className="text-lg text-neutral-500 max-w-md mx-auto">
-              追踪游戏时长，探索游戏库，发现你的玩家画像
+              使用 NSSO 连接你的 PlayStation 账号，追踪游戏时长，探索游戏库，发现你的玩家画像
             </p>
           </div>
 

@@ -5,10 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { LogOut, Gamepad2 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { useState } from "react";
+import { Input } from "@/components/ui/input";
 
 export default function LoginButton() {
   const { data: session } = useSession();
   const { t } = useI18n();
+  const [npsso, setNpsso] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (session) {
     return (
@@ -21,8 +26,8 @@ export default function LoginButton() {
         </Avatar>
         <div className="hidden sm:flex flex-col">
           <span className="text-sm font-medium">{session.user?.name}</span>
-          <button 
-            onClick={() => signOut()} 
+          <button
+            onClick={() => signOut()}
             className="text-xs text-muted-foreground hover:text-destructive transition-colors text-left flex items-center gap-1"
           >
             <LogOut className="h-3 w-3" />
@@ -33,15 +38,38 @@ export default function LoginButton() {
     );
   }
 
+  const handleLogin = async () => {
+    setLoading(true);
+    setError(null);
+    const result = await signIn("credentials", {
+      npsso,
+      redirect: false,
+    });
+    if (result?.error) {
+      setError(result.error);
+    }
+    setLoading(false);
+  };
+
   return (
-    <Button
-      onClick={() => signIn("steam")}
-      variant="steam"
-      size="lg"
-      className="gap-3"
-    >
-      <Gamepad2 className="h-5 w-5" />
-      {t.login.signIn}
-    </Button>
+    <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
+      <Input
+        value={npsso}
+        onChange={(e) => setNpsso(e.target.value)}
+        placeholder="请输入 NSSO Token"
+        className="w-full sm:w-64"
+      />
+      <Button
+        onClick={handleLogin}
+        variant="steam"
+        size="lg"
+        className="gap-3"
+        disabled={loading || !npsso}
+      >
+        <Gamepad2 className="h-5 w-5" />
+        {loading ? "登录中..." : t.login.signIn}
+      </Button>
+      {error && <p className="text-xs text-destructive text-left w-full sm:w-auto">{error}</p>}
+    </div>
   );
 }

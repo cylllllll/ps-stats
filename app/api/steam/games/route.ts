@@ -1,21 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
-import axios from "axios";
+import { getToken } from "next-auth/jwt";
+import { fetchPlayStationGames } from "@/lib/playstation";
+
+function mapTitlesToGames(titles: Awaited<ReturnType<typeof fetchPlayStationGames>>) {
+  return titles.map((title, index) => {
+    const parsedId = title.titleId ? parseInt(title.titleId.replace(/\D/g, ""), 10) : index;
+    const playMinutes = Math.round(((title.playDuration || 0) / 60));
+    const lastPlayed = title.lastPlayedDateTime
+      ? Math.floor(new Date(title.lastPlayedDateTime).getTime() / 1000)
+      : 0;
+
+    return {
+      appid: Number.isNaN(parsedId) ? index : parsedId,
+      name: title.name || title.titleId || `Game ${index + 1}`,
+      playtime_forever: playMinutes,
+      img_icon_url: title.media?.boxArt || title.media?.tile || "",
+      rtime_last_played: lastPlayed,
+    };
+  });
+}
 
 export async function GET(req: NextRequest) {
-  const searchParams = req.nextUrl.searchParams;
-  const steamId = searchParams.get("steamId");
+  const token = await getToken({ req });
 
-  if (!steamId) {
-    return NextResponse.json({ error: "Missing steamId" }, { status: 400 });
+  if (!token?.accessToken) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
-    const response = await axios.get(
-      `http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${process.env.STEAM_SECRET}&steamid=${steamId}&format=json&include_appinfo=1&include_played_free_games=1`
-    );
-    return NextResponse.json(response.data);
+    const titles = await fetchPlayStationGames(token.accessToken as string);
+    const games = mapTitlesToGames(titles);
+    return NextResponse.json({ response: { games } });
   } catch (error) {
     console.error("Error fetching games:", error);
-    return NextResponse.json({ error: "Failed to fetch games" }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

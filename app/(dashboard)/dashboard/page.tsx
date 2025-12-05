@@ -69,7 +69,7 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">Your Steam gaming overview</p>
+          <p className="text-muted-foreground">Your PlayStation gaming overview</p>
         </div>
         <div className="flex items-center gap-2">
           {fromCache && cacheAge !== null && (

@@ -266,6 +266,7 @@ async function waitForImages(root: HTMLElement): Promise<void> {
             return;
           }
 
+          let startedRetry = false;
           if (
             image.complete &&
             image.naturalWidth === 0 &&
@@ -273,9 +274,10 @@ async function waitForImages(root: HTMLElement): Promise<void> {
             !image.src.startsWith("data:")
           ) {
             image.src = addRetryQuery(image.src, attempt + 1);
+            startedRetry = true;
           }
 
-          await waitForImageEvent(image);
+          await waitForImageEvent(image, startedRetry);
 
           // An error can trigger the React fallback and start a second image
           // request. Continue the loop so we wait for that request as well.
@@ -287,8 +289,8 @@ async function waitForImages(root: HTMLElement): Promise<void> {
   );
 }
 
-function waitForImageEvent(image: HTMLImageElement): Promise<void> {
-  if (image.complete) return Promise.resolve();
+function waitForImageEvent(image: HTMLImageElement, forceWait = false): Promise<void> {
+  if (!forceWait && image.complete) return Promise.resolve();
 
   return new Promise<void>((resolve) => {
     const finish = () => {

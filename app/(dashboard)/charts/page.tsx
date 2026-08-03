@@ -23,8 +23,8 @@ export default function ChartsPage() {
     <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">Statistics</h1>
-        <p className="text-muted-foreground">Visualize your gaming habits</p>
+        <h1 className="text-2xl font-bold">PlayStation 统计</h1>
+        <p className="text-muted-foreground">可视化你的游玩时长、平台和奖杯进度</p>
       </div>
 
       {/* Charts */}

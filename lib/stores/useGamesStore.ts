@@ -1,171 +1,130 @@
 "use client";
 
 import { create } from "zustand";
-import { SteamGame } from "@/app/types/steam";
+import type {
+  PlayStationGame,
+  PlayStationProfile,
+} from "@/app/types/playstation";
 import {
   getCachedGames,
-  setCachedGames,
   getCacheInfo,
-  getCachedReviews,
-  setCachedReviews,
-  getReviewsCacheInfo,
-  clearReviewsCache,
-  type UserReview,
+  setCachedGames,
 } from "@/lib/cache";
 
 interface GamesState {
-  // Games
-  games: SteamGame[];
+  games: PlayStationGame[];
+  profile: PlayStationProfile | null;
+  psnId: string | null;
   gamesLoading: boolean;
   gamesRefreshing: boolean;
   gamesFromCache: boolean;
   gamesCacheAge: number | null;
+  gamesError: string | null;
 
-  // Reviews
-  reviews: UserReview[];
-  totalReviews: number;
-  reviewsLoading: boolean;
-  reviewsRefreshing: boolean;
-  reviewsFromCache: boolean;
-  reviewsCacheAge: number | null;
-
-  // Steam ID (set once on login)
-  steamId: string | null;
-
-  // Actions
-  setSteamId: (steamId: string) => void;
+  setPsnId: (psnId: string) => void;
   fetchGames: (forceRefresh?: boolean) => Promise<void>;
-  fetchReviews: (forceRefresh?: boolean) => Promise<void>;
   initializeData: () => Promise<void>;
   reset: () => void;
 }
 
 const initialState = {
   games: [],
+  profile: null,
+  psnId: null,
   gamesLoading: true,
   gamesRefreshing: false,
   gamesFromCache: false,
   gamesCacheAge: null,
-
-  reviews: [],
-  totalReviews: 0,
-  reviewsLoading: true,
-  reviewsRefreshing: false,
-  reviewsFromCache: false,
-  reviewsCacheAge: null,
-
-  steamId: null,
-};
+  gamesError: null,
+} satisfies Omit<
+  GamesState,
+  "setPsnId" | "fetchGames" | "initializeData" | "reset"
+>;
 
 export const useGamesStore = create<GamesState>((set, get) => ({
   ...initialState,
 
-  setSteamId: (steamId: string) => {
-    set({ steamId });
+  setPsnId: (psnId: string) => {
+    const normalized = psnId.trim();
+    if (!normalized || normalized === get().psnId) return;
+
+    set({
+      ...initialState,
+      psnId: normalized,
+    });
   },
 
   fetchGames: async (forceRefresh = false) => {
-    const { steamId } = get();
-    if (!steamId) return;
+    const psnId = get().psnId;
+    if (!psnId) return;
 
     if (forceRefresh) {
-      set({ gamesRefreshing: true });
+      set({ gamesRefreshing: true, gamesError: null });
     }
 
     if (!forceRefresh) {
-      const cached = await getCachedGames(steamId);
-      if (cached) {
-        const info = await getCacheInfo(steamId);
+      const cached = await getCachedGames(psnId);
+      if (cached && get().psnId === psnId) {
+        const info = await getCacheInfo(psnId);
         set({
-          games: cached,
+          games: cached.games,
+          profile: cached.profile,
           gamesFromCache: true,
           gamesCacheAge: info.age,
           gamesLoading: false,
           gamesRefreshing: false,
+          gamesError: null,
         });
         return;
       }
     }
 
     try {
-      const res = await fetch(`/api/steam/games?steamId=${steamId}`);
-      const data = await res.json();
-      if (data.response?.games) {
-        const fetchedGames = data.response.games;
-        await setCachedGames(steamId, fetchedGames);
+      const response = await fetch(
+        `/api/psn/games?psnId=${encodeURIComponent(psnId)}`
+      );
+      const data = (await response.json()) as {
+        error?: string;
+        games?: PlayStationGame[];
+        profile?: PlayStationProfile;
+      };
+
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to load this PSN profile.");
+      }
+      if (!data.games || !data.profile) {
+        throw new Error("The PSN response did not contain a game library.");
+      }
+
+      if (get().psnId !== psnId) return;
+      await setCachedGames(psnId, data.games, data.profile);
+      set({
+        games: data.games,
+        profile: data.profile,
+        gamesFromCache: false,
+        gamesCacheAge: null,
+        gamesLoading: false,
+        gamesRefreshing: false,
+        gamesError: null,
+      });
+    } catch (error) {
+      console.error("[Store] Failed to fetch PSN games:", error);
+      if (get().psnId === psnId) {
         set({
-          games: fetchedGames,
-          gamesFromCache: false,
-          gamesCacheAge: null,
           gamesLoading: false,
           gamesRefreshing: false,
+          gamesError:
+            error instanceof Error
+              ? error.message
+              : "Unable to load this PSN profile.",
         });
       }
-    } catch (err) {
-      console.error("[Store] Failed to fetch games:", err);
-      set({ gamesLoading: false, gamesRefreshing: false });
-    }
-  },
-
-  fetchReviews: async (forceRefresh = false) => {
-    const { steamId } = get();
-    if (!steamId) return;
-
-    if (forceRefresh) {
-      set({ reviewsRefreshing: true });
-      await clearReviewsCache(steamId);
-    }
-
-    if (!forceRefresh) {
-      const cached = await getCachedReviews(steamId);
-      if (cached) {
-        console.log(`[Store] Using cached reviews (${cached.reviews.length})`);
-        const info = await getReviewsCacheInfo(steamId);
-        set({
-          reviews: cached.reviews,
-          totalReviews: cached.totalReviews,
-          reviewsFromCache: true,
-          reviewsCacheAge: info.age,
-          reviewsLoading: false,
-          reviewsRefreshing: false,
-        });
-        return;
-      }
-    }
-
-    try {
-      console.log("[Store] Fetching reviews from API...");
-      const res = await fetch("/api/steam/reviews");
-      if (res.ok) {
-        const data = await res.json();
-        const reviewsData = data.reviews || [];
-        await setCachedReviews(steamId, reviewsData, data.totalReviews || reviewsData.length);
-        console.log(`[Store] Fetched ${reviewsData.length} reviews`);
-        set({
-          reviews: reviewsData,
-          totalReviews: data.totalReviews || reviewsData.length,
-          reviewsFromCache: false,
-          reviewsCacheAge: null,
-          reviewsLoading: false,
-          reviewsRefreshing: false,
-        });
-      }
-    } catch (err) {
-      console.error("[Store] Failed to fetch reviews:", err);
-      set({ reviewsLoading: false, reviewsRefreshing: false });
     }
   },
 
   initializeData: async () => {
-    const { steamId, gamesLoading } = get();
-    // Only initialize if we have steamId and haven't started loading
-    if (!steamId || !gamesLoading) return;
-
-    // Fetch in parallel
-    await Promise.all([
-      get().fetchGames(),
-      get().fetchReviews(),
-    ]);
+    if (!get().psnId || !get().gamesLoading) return;
+    await get().fetchGames();
   },
 
   reset: () => {

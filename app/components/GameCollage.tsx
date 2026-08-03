@@ -1,522 +1,621 @@
 "use client";
 
-import { useRef, useState, useCallback, useEffect } from "react";
-import { SteamGame } from "../types/steam";
+import { useEffect, useMemo, useRef, useState, type SyntheticEvent } from "react";
+import { Download, Loader2 } from "lucide-react";
+import { toBlob } from "html-to-image";
+import type { PlayStationGame } from "@/app/types/playstation";
 import { Button } from "@/components/ui/button";
-import { Download, Loader2, RefreshCw } from "lucide-react";
+import { formatDuration, gameCoverAspectClass, gameCoverImageHeightClass, gameCoverObjectFit, isPlayed, isPS4Platform, platformLabel } from "@/lib/playstation";
 
 interface GameCollageProps {
-  games: SteamGame[];
-  maxGames?: number;
+  games: PlayStationGame[];
   userName?: string;
-  steamId?: string;
+  psnId?: string;
   userAvatar?: string;
+  maxGames?: number;
+  periodLabel?: string;
 }
 
-interface GameBox {
-  game: SteamGame;
-  w: number;
-  h: number;
-  x: number;
-  y: number;
+interface CollageGame {
+  game: PlayStationGame;
+  exportScale: number;
 }
 
-// Steam header images are 460x215 (aspect ratio ~2.14:1)
-const HEADER_ASPECT_RATIO = 460 / 215;
+interface ExportPlacement {
+  column: number;
+  row: number;
+  columnSpan: number;
+  rowSpan: number;
+}
 
-// High DPI scale factor for better resolution
-const SCALE_FACTOR = 2;
+const EXPORT_PLACEHOLDER = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><rect width="512" height="512" fill="#243248"/><path d="M128 352l78-86 56 58 42-48 80 76H128z" fill="#61708a"/><circle cx="205" cy="185" r="34" fill="#61708a"/></svg>'
+)}`;
 
-// Check if two rectangles overlap
-function rectsOverlap(
-  r1: { x: number; y: number; w: number; h: number },
-  r2: { x: number; y: number; w: number; h: number }
-): boolean {
-  return !(
-    r1.x + r1.w <= r2.x ||
-    r2.x + r2.w <= r1.x ||
-    r1.y + r1.h <= r2.y ||
-    r2.y + r2.h <= r1.y
+function getExportImageUrl(url: string): string {
+  const normalizedUrl = normalizeImageUrl(url);
+  if (
+    !normalizedUrl ||
+    normalizedUrl.startsWith("data:") ||
+    normalizedUrl.startsWith("blob:") ||
+    normalizedUrl.startsWith("/")
+  ) {
+    return normalizedUrl;
+  }
+  return `/api/image-proxy?url=${encodeURIComponent(normalizedUrl)}`;
+}
+
+function normalizeImageUrl(url: string): string {
+  return url.trim().replace(/^http:\/\//i, "https://");
+}
+
+function getExportScale(
+  playtimeSeconds: number,
+  maxPlaytimeSeconds: number,
+  rank: number
+): number {
+  if (rank === 0) return 1;
+  if (rank === 1) return 0.5;
+  if (maxPlaytimeSeconds <= 0) return 0.25;
+  const ratio = Math.max(0, Math.min(1, playtimeSeconds / maxPlaytimeSeconds));
+  return Math.max(0.25, Math.min(0.5, Math.round(Math.sqrt(ratio) * 4) / 4));
+}
+
+// Integer grid points that travel clockwise from the top-left corner.
+// The first tile is placed explicitly at (0, 0); the remaining points are
+// searched in this order so the next tile starts on its right-hand side.
+function getSpiralPoints(count: number): Array<{ x: number; y: number }> {
+  const points: Array<{ x: number; y: number }> = [{ x: 0, y: 0 }];
+  const directions = [
+    { x: 1, y: 0 },
+    { x: 0, y: 1 },
+    { x: -1, y: 0 },
+    { x: 0, y: -1 },
+  ];
+  let x = 0;
+  let y = 0;
+  let directionIndex = 0;
+  let segmentLength = 1;
+
+  while (points.length < count) {
+    for (let segment = 0; segment < 2 && points.length < count; segment += 1) {
+      const direction = directions[directionIndex];
+      for (let step = 0; step < segmentLength && points.length < count; step += 1) {
+        x += direction.x;
+        y += direction.y;
+        points.push({ x, y });
+      }
+      directionIndex = (directionIndex + 1) % directions.length;
+    }
+    segmentLength += 1;
+  }
+
+  return points;
+}
+
+function placementsOverlap(first: ExportPlacement, second: ExportPlacement): boolean {
+  return (
+    first.column < second.column + second.columnSpan &&
+    second.column < first.column + first.columnSpan &&
+    first.row < second.row + second.rowSpan &&
+    second.row < first.row + first.rowSpan
   );
 }
 
-// Check if a box overlaps with any placed boxes
-function hasOverlap(
-  box: { x: number; y: number; w: number; h: number },
-  placedBoxes: GameBox[]
-): boolean {
-  for (const placed of placedBoxes) {
-    if (rectsOverlap(box, placed)) {
-      return true;
-    }
+function getTileSpans(
+  collageGame: CollageGame,
+  baseSpan: number,
+  minimumSpan: number
+): { columnSpan: number; rowSpan: number } {
+  const squareSpan = Math.max(
+    minimumSpan,
+    Math.round(collageGame.exportScale * baseSpan)
+  );
+
+  if (isPS4Platform(collageGame.game.platform)) {
+    // A PS4 cover is rendered as a 2:1 rectangle: at the same scale it uses
+    // half the area of a square cover instead of being shrunk in both axes.
+    return {
+      columnSpan: squareSpan,
+      rowSpan: Math.max(1, Math.round(squareSpan / 2)),
+    };
   }
-  return false;
+
+  return { columnSpan: squareSpan, rowSpan: squareSpan };
 }
 
-// Place boxes in spiral pattern from center outward
-function spiralPlacement(
-  boxes: { game: SteamGame; w: number; h: number }[],
-  canvasWidth: number,
-  canvasHeight: number
-): GameBox[] {
-  const placed: GameBox[] = [];
-  const centerX = canvasWidth / 2;
-  const centerY = canvasHeight / 2;
+function applyExportLayout(
+  exportRoot: HTMLElement,
+  collageGames: CollageGame[],
+  exportWidth: number
+): void {
+  const grid = exportRoot.querySelector<HTMLElement>("[data-collage-grid]");
+  if (!grid) return;
 
-  for (const box of boxes) {
-    let bestPos: { x: number; y: number } | null = null;
-    let bestDist = Infinity;
+  const columns = exportWidth >= 640 ? 32 : 16;
+  const baseSpan = columns / 2;
+  const minimumSpan = Math.max(2, Math.round(baseSpan / 4));
+  const gap = 8;
+  const cellSize = Math.max(12, (exportWidth - gap * (columns - 1)) / columns);
+  const spiralPoints = getSpiralPoints(Math.max(1024, collageGames.length * 256));
+  const placements: ExportPlacement[] = [];
+  const tiles = Array.from(grid.querySelectorAll<HTMLElement>("[data-collage-tile]"));
+  let pointIndex = 1;
 
-    // Try to place at center first
-    const startX = centerX - box.w / 2;
-    const startY = centerY - box.h / 2;
+  collageGames.forEach((collageGame, index) => {
+    const { columnSpan, rowSpan } = getTileSpans(
+      collageGame,
+      baseSpan,
+      minimumSpan
+    );
+    let placement: ExportPlacement | null = null;
 
-    if (!hasOverlap({ x: startX, y: startY, w: box.w, h: box.h }, placed)) {
-      bestPos = { x: startX, y: startY };
-      bestDist = 0;
-    } else {
-      // Spiral outward to find a valid position
-      const step = 8; // Search step size
-      const maxRadius = Math.max(canvasWidth, canvasHeight);
-
-      for (let radius = step; radius < maxRadius && !bestPos; radius += step) {
-        // Try positions in a circle at this radius
-        const circumference = 2 * Math.PI * radius;
-        const numPoints = Math.max(8, Math.floor(circumference / step));
-
-        for (let i = 0; i < numPoints; i++) {
-          const angle = (2 * Math.PI * i) / numPoints;
-          const x = centerX + Math.cos(angle) * radius - box.w / 2;
-          const y = centerY + Math.sin(angle) * radius - box.h / 2;
-
-          // Check bounds
-          if (
-            x < 0 ||
-            y < 0 ||
-            x + box.w > canvasWidth ||
-            y + box.h > canvasHeight
-          ) {
-            continue;
-          }
-
-          if (!hasOverlap({ x, y, w: box.w, h: box.h }, placed)) {
-            const dist = Math.sqrt(
-              Math.pow(x + box.w / 2 - centerX, 2) +
-                Math.pow(y + box.h / 2 - centerY, 2)
-            );
-            if (dist < bestDist) {
-              bestDist = dist;
-              bestPos = { x, y };
-            }
-          }
-        }
-
-        // If we found a position at this radius, use it
-        if (bestPos) break;
+    if (index === 0) {
+      placement = { column: 0, row: 0, columnSpan, rowSpan };
+    } else if (index === 1) {
+      // Keep the second-ranked game on the first game's right edge even when
+      // the first cover is a shorter PS4 rectangle.
+      const firstPlacement = placements[0];
+      const rightOfFirst: ExportPlacement = {
+        column: firstPlacement.column + firstPlacement.columnSpan,
+        row: firstPlacement.row,
+        columnSpan,
+        rowSpan,
+      };
+      if (
+        rightOfFirst.column + rightOfFirst.columnSpan <= columns &&
+        !placements.some((placed) => placementsOverlap(rightOfFirst, placed))
+      ) {
+        placement = rightOfFirst;
+        const pointAtSecond = spiralPoints.findIndex(
+          (point) => point.x === rightOfFirst.column && point.y === rightOfFirst.row
+        );
+        if (pointAtSecond >= 0) pointIndex = pointAtSecond + 1;
       }
     }
 
-    if (bestPos) {
-      placed.push({
-        game: box.game,
-        w: box.w,
-        h: box.h,
-        x: bestPos.x,
-        y: bestPos.y,
-      });
+    if (!placement) {
+      while (pointIndex < spiralPoints.length && !placement) {
+        const point = spiralPoints[pointIndex];
+        pointIndex += 1;
+        const candidate: ExportPlacement = {
+          column: point.x,
+          row: point.y,
+          columnSpan,
+          rowSpan,
+        };
+        if (
+          candidate.column >= 0 &&
+          candidate.row >= 0 &&
+          candidate.column + candidate.columnSpan <= columns &&
+          !placements.some((placed) => placementsOverlap(candidate, placed))
+        ) {
+          placement = candidate;
+        }
+      }
+    }
+
+    if (!placement) {
+      const lastRow = placements.reduce(
+        (max, placed) => Math.max(max, placed.row + placed.rowSpan),
+        0
+      );
+      placement = {
+        column: 0,
+        row: lastRow + 1,
+        columnSpan: Math.min(columnSpan, columns),
+        rowSpan,
+      };
+    }
+    placements.push(placement);
+  });
+
+  const rowCount = placements.reduce(
+    (max, placement) => Math.max(max, placement.row + placement.rowSpan),
+    0
+  );
+
+  grid.style.gridTemplateColumns = `repeat(${columns}, minmax(0, 1fr))`;
+  grid.style.gridAutoRows = `${cellSize}px`;
+  grid.style.gridAutoFlow = "row";
+  grid.style.gap = `${gap}px`;
+  grid.style.height = `${rowCount * cellSize + Math.max(0, rowCount - 1) * gap}px`;
+
+  tiles.forEach((tile, index) => {
+    const placement = placements[index];
+    if (!placement) return;
+
+    tile.style.gridColumn = `${placement.column + 1} / span ${placement.columnSpan}`;
+    tile.style.gridRow = `${placement.row + 1} / span ${placement.rowSpan}`;
+    tile.style.height = "100%";
+
+    const coverFrame = tile.querySelector<HTMLElement>("[data-collage-cover-frame]");
+    if (coverFrame) {
+      coverFrame.style.height = "100%";
+      coverFrame.style.aspectRatio = `${placement.columnSpan} / ${placement.rowSpan}`;
+    }
+  });
+}
+
+function handleImageError(
+  event: SyntheticEvent<HTMLImageElement>,
+  originalUrl: string
+): void {
+  const image = event.currentTarget;
+
+  if (image.dataset.directFallback === "true") {
+    image.removeAttribute("crossorigin");
+    image.src = EXPORT_PLACEHOLDER;
+    return;
+  }
+
+  image.dataset.directFallback = "true";
+  image.dataset.originalSrc = normalizeImageUrl(originalUrl);
+  image.dataset.exportSrc = getExportImageUrl(originalUrl);
+  image.removeAttribute("crossorigin");
+  image.src = image.dataset.originalSrc;
+}
+
+async function waitForImages(root: HTMLElement): Promise<void> {
+  const images = Array.from(root.querySelectorAll("img"));
+  await Promise.all(
+    images.map(
+      async (image) => {
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          if (image.complete && image.naturalWidth > 0) {
+            return;
+          }
+
+          if (
+            image.complete &&
+            image.naturalWidth === 0 &&
+            image.src &&
+            !image.src.startsWith("data:")
+          ) {
+            image.src = addRetryQuery(image.src, attempt + 1);
+          }
+
+          await waitForImageEvent(image);
+
+          // An error can trigger the React fallback and start a second image
+          // request. Continue the loop so we wait for that request as well.
+          if (image.complete && image.naturalWidth > 0) return;
+          if (image.src.startsWith("data:")) return;
+        }
+      }
+    )
+  );
+}
+
+function waitForImageEvent(image: HTMLImageElement): Promise<void> {
+  if (image.complete) return Promise.resolve();
+
+  return new Promise<void>((resolve) => {
+    const finish = () => {
+      window.clearTimeout(timeoutId);
+      image.removeEventListener("load", finish);
+      image.removeEventListener("error", finish);
+      resolve();
+    };
+
+    const timeoutId = window.setTimeout(finish, 10000);
+    image.addEventListener("load", finish, { once: true });
+    image.addEventListener("error", finish, { once: true });
+  });
+}
+
+function addRetryQuery(url: string, attempt: number): string {
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}exportRetry=${Date.now()}-${attempt}`;
+}
+
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : EXPORT_PLACEHOLDER);
+    reader.onerror = () => reject(reader.error || new Error("Unable to read image data."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function hasBytes(bytes: Uint8Array, offset: number, values: number[]): boolean {
+  return values.every((value, index) => bytes[offset + index] === value);
+}
+
+function hasText(bytes: Uint8Array, text: string, offset = 0): boolean {
+  return text.split("").every((character, index) => bytes[offset + index] === character.charCodeAt(0));
+}
+
+async function getImageMimeType(blob: Blob): Promise<string | null> {
+  const declaredType = blob.type.split(";", 1)[0].toLowerCase();
+  if (declaredType.startsWith("image/")) return declaredType;
+
+  const bytes = new Uint8Array(await blob.slice(0, 64).arrayBuffer());
+  if (hasBytes(bytes, 0, [0xff, 0xd8, 0xff])) return "image/jpeg";
+  if (hasBytes(bytes, 0, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return "image/png";
+  if (hasText(bytes, "GIF8")) return "image/gif";
+  if (hasText(bytes, "RIFF") && hasText(bytes, "WEBP", 8)) return "image/webp";
+
+  const prefix = new TextDecoder().decode(bytes).trimStart().toLowerCase();
+  if (prefix.startsWith("<svg") || (prefix.startsWith("<?xml") && prefix.includes("<svg"))) {
+    return "image/svg+xml";
+  }
+
+  return null;
+}
+
+async function imageBlobToDataUrl(blob: Blob): Promise<string> {
+  const mimeType = await getImageMimeType(blob);
+  if (!mimeType) throw new Error("Image response did not contain a recognized image.");
+
+  const typedBlob = blob.type.toLowerCase().startsWith("image/")
+    ? blob
+    : new Blob([await blob.arrayBuffer()], { type: mimeType });
+  return blobToDataUrl(typedBlob);
+}
+
+function uniqueImageUrls(urls: Array<string | undefined>): string[] {
+  return Array.from(new Set(urls.filter((url): url is string => Boolean(url))));
+}
+
+function getImageSourceCandidates(image?: HTMLImageElement): string[] {
+  if (!image) return [];
+
+  const originalUrl = image.dataset.originalSrc;
+  const currentUrl = image.currentSrc || image.src;
+  return uniqueImageUrls([
+    image.dataset.exportSrc,
+    originalUrl ? getExportImageUrl(originalUrl) : undefined,
+    currentUrl.startsWith("data:") ? currentUrl : undefined,
+    currentUrl.startsWith("/") ? currentUrl : undefined,
+    currentUrl.startsWith("http") ? currentUrl : undefined,
+  ]);
+}
+
+async function imageToDataUrl(image?: HTMLImageElement): Promise<string> {
+  let lastError: unknown;
+  for (const sourceUrl of getImageSourceCandidates(image)) {
+    if (sourceUrl.startsWith("data:")) return sourceUrl;
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const response = await fetch(
+          attempt === 0 ? sourceUrl : addRetryQuery(sourceUrl, attempt),
+          {
+            cache: "no-store",
+            credentials: "same-origin",
+          }
+        );
+        if (!response.ok) throw new Error(`Image request failed with ${response.status}.`);
+
+        const blob = await response.blob();
+        if (!blob.size) throw new Error("Image response was empty.");
+        return await imageBlobToDataUrl(blob);
+      } catch (error) {
+        lastError = error;
+        if (attempt < 2) await wait(150 * (attempt + 1));
+      }
     }
   }
 
-  return placed;
+  console.warn("Unable to inline collage image:", lastError);
+  return EXPORT_PLACEHOLDER;
 }
 
-// Calculate bounding box of all placed items
-function getBoundingBox(boxes: GameBox[]): {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-} {
-  let minX = Infinity,
-    minY = Infinity,
-    maxX = -Infinity,
-    maxY = -Infinity;
+async function inlineImages(
+  sourceRoot: HTMLElement,
+  exportRoot: HTMLElement
+): Promise<void> {
+  const sourceImages = Array.from(sourceRoot.querySelectorAll("img"));
+  const exportImages = Array.from(exportRoot.querySelectorAll("img"));
 
-  for (const box of boxes) {
-    minX = Math.min(minX, box.x);
-    minY = Math.min(minY, box.y);
-    maxX = Math.max(maxX, box.x + box.w);
-    maxY = Math.max(maxY, box.y + box.h);
-  }
-
-  return { minX, minY, maxX, maxY };
+  await Promise.all(exportImages.map(async (image, index) => {
+    image.removeAttribute("crossorigin");
+    image.removeAttribute("srcset");
+    image.removeAttribute("sizes");
+    image.removeAttribute("loading");
+    image.onerror = () => {
+      image.onerror = null;
+      image.src = EXPORT_PLACEHOLDER;
+    };
+    image.src = await imageToDataUrl(sourceImages[index]);
+  }));
 }
 
 export default function GameCollage({
   games,
-  maxGames = 500,
   userName,
-  steamId,
+  psnId,
   userAvatar,
+  maxGames,
+  periodLabel = "all titles",
 }: GameCollageProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [generated, setGenerated] = useState(false);
-  const [canvasStyle, setCanvasStyle] = useState<{
-    width: string;
-    height: string;
-  }>({ width: "100%", height: "auto" });
+  const cardRef = useRef<HTMLDivElement>(null);
+  const previewUrlRef = useRef<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-  const generateCollage = useCallback(async () => {
-    if (loading) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    };
+  }, []);
 
-    setLoading(true);
-    setProgress(0);
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Filter games with playtime and sort by playtime (descending - most played first)
-    const playedGames = games
-      .filter((g) => g.playtime_forever > 0)
-      .sort((a, b) => b.playtime_forever - a.playtime_forever)
-      .slice(0, maxGames);
-
-    if (playedGames.length === 0) {
-      setLoading(false);
-      return;
-    }
-
-    const maxPlaytime = playedGames[0].playtime_forever;
-    const totalPlaytime = playedGames.reduce(
-      (sum, g) => sum + g.playtime_forever,
-      0
-    );
-    const totalHours = Math.round(totalPlaytime / 60);
-
-    // Size parameters (in logical pixels, will be scaled up for high DPI)
-    const minHeight = 50;
-    const maxHeight = 250;
-
-    // Create boxes with sizes based on playtime
-    // Games are already sorted by playtime (highest first)
-    const boxes = playedGames.map((game) => {
-      const ratio = Math.sqrt(game.playtime_forever / maxPlaytime);
-      const h = Math.round(minHeight + ratio * (maxHeight - minHeight));
-      const w = Math.round(h * HEADER_ASPECT_RATIO);
-      return { game, w, h };
-    });
-
-    // Initial canvas size for placement calculation
-    const workingSize = 4000;
-
-    // Place boxes using spiral algorithm (highest playtime = center)
-    const placed = spiralPlacement(boxes, workingSize, workingSize);
-
-    if (placed.length === 0) {
-      setLoading(false);
-      return;
-    }
-
-    // Calculate actual bounding box and normalize positions
-    const bounds = getBoundingBox(placed);
-    const padding = 40;
-    const headerHeight = userName ? 80 : 0; // Add header space if user info available
-
-    const logicalWidth = bounds.maxX - bounds.minX + padding * 2;
-    const logicalHeight =
-      bounds.maxY - bounds.minY + padding * 2 + headerHeight;
-
-    // Normalize positions (offset by header)
-    for (const box of placed) {
-      box.x = box.x - bounds.minX + padding;
-      box.y = box.y - bounds.minY + padding + headerHeight;
-    }
-
-    // Set canvas size with scale factor for high DPI
-    canvas.width = logicalWidth * SCALE_FACTOR;
-    canvas.height = logicalHeight * SCALE_FACTOR;
-
-    // Scale context for high DPI rendering
-    ctx.scale(SCALE_FACTOR, SCALE_FACTOR);
-
-    // Dark background (use logical dimensions)
-    ctx.fillStyle = "#0a0a0f";
-    ctx.fillRect(0, 0, logicalWidth, logicalHeight);
-
-    // Draw user header if available
-    if (userName && headerHeight > 0) {
-      // Load avatar image
-      let avatarImg: HTMLImageElement | null = null;
-      if (userAvatar) {
-        try {
-          const avatarUrl = `/api/image-proxy?url=${encodeURIComponent(
-            userAvatar
-          )}`;
-          avatarImg = await new Promise<HTMLImageElement>((resolve, reject) => {
-            const img = new Image();
-            img.crossOrigin = "anonymous";
-            img.onload = () => resolve(img);
-            img.onerror = reject;
-            img.src = avatarUrl;
-          });
-        } catch {
-          // Avatar loading failed, continue without it
-        }
-      }
-
-      const avatarSize = 50;
-      const avatarX = padding;
-      const avatarY = padding - 5;
-
-      // Draw avatar
-      if (avatarImg) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(
-          avatarX + avatarSize / 2,
-          avatarY + avatarSize / 2,
-          avatarSize / 2,
-          0,
-          Math.PI * 2
+  const topGames: CollageGame[] = useMemo(
+    () => {
+      const rankedGames = [...games]
+        .filter(isPlayed)
+        .sort(
+          (a, b) =>
+            b.playtimeSeconds - a.playtimeSeconds ||
+            b.trophyProgress - a.trophyProgress
         );
-        ctx.clip();
-        ctx.drawImage(avatarImg, avatarX, avatarY, avatarSize, avatarSize);
-        ctx.restore();
+      const visibleGames = maxGames === undefined
+        ? rankedGames
+        : rankedGames.slice(0, maxGames);
+      const maxPlaytimeSeconds = visibleGames[0]?.playtimeSeconds || 0;
 
-        // Avatar border
-        ctx.strokeStyle = "rgba(255,255,255,0.3)";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(
-          avatarX + avatarSize / 2,
-          avatarY + avatarSize / 2,
-          avatarSize / 2,
-          0,
-          Math.PI * 2
-        );
-        ctx.stroke();
-      }
+      return visibleGames.map((game, index) => ({
+        game,
+        exportScale: getExportScale(game.playtimeSeconds, maxPlaytimeSeconds, index),
+      }));
+    },
+    [games, maxGames]
+  );
 
-      // Draw user name
-      const textX = avatarImg ? avatarX + avatarSize + 15 : padding;
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 22px system-ui, sans-serif";
-      ctx.textAlign = "left";
-      ctx.textBaseline = "top";
-      ctx.fillText(userName, textX, avatarY + 5);
+  const downloadCollage = async () => {
+    const sourceRoot = cardRef.current;
+    if (!sourceRoot) return;
+    setDownloading(true);
+    setDownloadError(null);
 
-      // Draw stats
-      ctx.fillStyle = "rgba(255,255,255,0.6)";
-      ctx.font = "14px system-ui, sans-serif";
-      ctx.fillText(
-        `${playedGames.length} 款游戏 · ${totalHours.toLocaleString()} 小时`,
-        textX,
-        avatarY + 32
+    let exportRoot: HTMLElement | null = null;
+    let exportHost: HTMLDivElement | null = null;
+    try {
+      await waitForImages(sourceRoot);
+
+      exportRoot = sourceRoot.cloneNode(true) as HTMLElement;
+      const bounds = sourceRoot.getBoundingClientRect();
+      exportRoot.style.width = `${bounds.width}px`;
+      exportRoot.style.maxWidth = "none";
+      exportRoot.setAttribute("aria-hidden", "true");
+
+      exportHost = document.createElement("div");
+      exportHost.style.position = "fixed";
+      exportHost.style.left = "0";
+      exportHost.style.top = "0";
+      exportHost.style.width = `${bounds.width}px`;
+      exportHost.style.opacity = "0";
+      exportHost.style.zIndex = "-1";
+      exportHost.style.pointerEvents = "none";
+      exportHost.appendChild(exportRoot);
+      document.body.appendChild(exportHost);
+      const exportGrid = exportRoot.querySelector<HTMLElement>("[data-collage-grid]");
+      applyExportLayout(
+        exportRoot,
+        topGames,
+        exportGrid?.getBoundingClientRect().width || bounds.width
       );
+      await inlineImages(sourceRoot, exportRoot);
+      await waitForImages(exportRoot);
 
-      // Draw Steam ID on the right
-      if (steamId) {
-        ctx.fillStyle = "rgba(255,255,255,0.4)";
-        ctx.font = "12px system-ui, sans-serif";
-        ctx.textAlign = "right";
-        ctx.fillText(
-          `Steam ID: ${steamId}`,
-          logicalWidth - padding,
-          avatarY + 10
-        );
-      }
+      const blob = await toBlob(exportRoot, {
+        cacheBust: false,
+        pixelRatio: 2,
+        backgroundColor: "#101827",
+        imagePlaceholder: EXPORT_PLACEHOLDER,
+        onImageErrorHandler: () => undefined,
+      });
+      if (!blob) throw new Error("The collage image was empty.");
 
-      // Separator line
-      ctx.strokeStyle = "rgba(255,255,255,0.1)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(padding, headerHeight - 5);
-      ctx.lineTo(logicalWidth - padding, headerHeight - 5);
-      ctx.stroke();
+      const objectUrl = URL.createObjectURL(blob);
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = objectUrl;
+      setPreviewUrl(objectUrl);
+      const link = document.createElement("a");
+      link.download = "playstation-game-collage.png";
+      link.href = objectUrl;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      console.error("Unable to export collage:", error);
+      setDownloadError("拼图导出失败，请稍后重试。");
+    } finally {
+      exportHost?.remove();
+      setDownloading(false);
     }
-
-    // Load and draw images
-    let loaded = 0;
-    const totalToLoad = placed.length;
-
-    // Load all images first
-    const imageMap = new Map<number, HTMLImageElement>();
-
-    for (const box of placed) {
-      const imageUrl = `/api/image-proxy?url=${encodeURIComponent(
-        `https://cdn.cloudflare.steamstatic.com/steam/apps/${box.game.appid}/header.jpg`
-      )}`;
-
-      try {
-        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-          const image = new Image();
-          image.crossOrigin = "anonymous";
-          image.onload = () => resolve(image);
-          image.onerror = reject;
-          image.src = imageUrl;
-        });
-        imageMap.set(box.game.appid, img);
-      } catch {
-        // Skip failed images
-      }
-
-      loaded++;
-      setProgress(Math.round((loaded / totalToLoad) * 100));
-    }
-
-    // Draw images (in reverse order so highest playtime is on top)
-    for (let i = placed.length - 1; i >= 0; i--) {
-      const box = placed[i];
-      const img = imageMap.get(box.game.appid);
-
-      if (img) {
-        ctx.save();
-        const radius = 4;
-        ctx.beginPath();
-        ctx.roundRect(box.x, box.y, box.w, box.h, radius);
-        ctx.clip();
-        ctx.drawImage(img, box.x, box.y, box.w, box.h);
-        ctx.restore();
-
-        // Border
-        ctx.strokeStyle = "rgba(255,255,255,0.15)";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.roundRect(box.x, box.y, box.w, box.h, radius);
-        ctx.stroke();
-      } else {
-        // Placeholder
-        ctx.fillStyle = "#1a1a24";
-        const radius = 4;
-        ctx.beginPath();
-        ctx.roundRect(box.x, box.y, box.w, box.h, radius);
-        ctx.fill();
-      }
-    }
-
-    // Subtle radial gradient overlay (vignette)
-    const maxDim = Math.max(logicalWidth, logicalHeight);
-    const gradient = ctx.createRadialGradient(
-      logicalWidth / 2,
-      logicalHeight / 2,
-      0,
-      logicalWidth / 2,
-      logicalHeight / 2,
-      maxDim / 1.5
-    );
-    gradient.addColorStop(0, "rgba(0,0,0,0)");
-    gradient.addColorStop(0.5, "rgba(0,0,0,0)");
-    gradient.addColorStop(1, "rgba(0,0,0,0.5)");
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, logicalWidth, logicalHeight);
-
-    // Watermark
-    ctx.fillStyle = "rgba(255,255,255,0.4)";
-    ctx.font = "bold 18px system-ui, sans-serif";
-    ctx.textAlign = "right";
-    ctx.textBaseline = "bottom";
-    ctx.fillText(
-      "https://steam-stats-brown.vercel.app",
-      logicalWidth - padding,
-      logicalHeight - padding / 2
-    );
-
-    // Calculate display size to fit container
-    const containerWidth = containerRef.current?.clientWidth || 800;
-    const aspectRatio = logicalWidth / logicalHeight;
-    const displayWidth = containerWidth;
-    const displayHeight = displayWidth / aspectRatio;
-
-    setCanvasStyle({
-      width: `${displayWidth}px`,
-      height: `${displayHeight}px`,
-    });
-
-    setLoading(false);
-    setGenerated(true);
-  }, [games, maxGames, loading, userName, steamId, userAvatar]);
-
-  const downloadImage = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const link = document.createElement("a");
-    link.download = "steam-game-collage.png";
-    link.href = canvas.toDataURL("image/png");
-    link.click();
   };
 
-  const playedGamesCount = games.filter((g) => g.playtime_forever > 0).length;
-
-  // Auto-generate on mount when games are available
-  useEffect(() => {
-    if (games.length > 0 && !generated && !loading) {
-      // Use setTimeout to avoid calling setState directly within effect
-      const timer = setTimeout(() => {
-        generateCollage();
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [games.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (topGames.length === 0) return null;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div
-        ref={containerRef}
-        className="relative rounded-lg overflow-hidden bg-[#0a0a0f] border border-border"
+        ref={cardRef}
+        className="rounded-2xl overflow-hidden bg-[#101827] text-white p-5"
       >
-        <canvas
-          ref={canvasRef}
-          style={{
-            display: generated ? "block" : "none",
-            ...canvasStyle,
-          }}
-        />
-        {!generated && (
-          <div className="aspect-16/10 flex items-center justify-center">
-            <div className="text-center">
-              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-primary" />
-              <p className="text-sm text-muted-foreground">
-                {loading
-                  ? `正在生成拼贴画... ${progress}%`
-                  : "准备生成拼贴画..."}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {Math.min(maxGames, playedGamesCount)} 款游戏
-              </p>
+        <div className="flex items-center justify-between gap-4 mb-5">
+          <div className="flex items-center gap-3 min-w-0">
+            {userAvatar ? (
+              <img
+                src={getExportImageUrl(userAvatar)}
+                data-export-src={getExportImageUrl(userAvatar)}
+                data-original-src={normalizeImageUrl(userAvatar)}
+                alt=""
+                className="h-10 w-10 rounded-full object-cover"
+                onError={(event) => handleImageError(event, userAvatar)}
+              />
+            ) : (
+              <div className="h-10 w-10 rounded-full bg-blue-500/30 flex items-center justify-center font-semibold">
+                {(userName || "P").charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="font-semibold truncate">{userName || "PlayStation player"}</p>
+              <p className="text-xs text-white/60 truncate">{psnId || "PSN"} · Trophy journey</p>
             </div>
           </div>
-        )}
+          <div className="text-right shrink-0">
+            <p className="text-2xl font-bold">{topGames.length}</p>
+            <p className="text-[10px] uppercase tracking-wider text-white/50">{periodLabel}</p>
+          </div>
+        </div>
+
+        <div data-collage-grid className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {topGames.map(({ game, exportScale }) => (
+            <div
+              key={game.id}
+              data-collage-tile
+              data-rectangular={isPS4Platform(game.platform) ? "true" : "false"}
+              data-export-scale={exportScale}
+              className="relative min-w-0 overflow-hidden rounded-xl bg-white/10"
+            >
+              <div
+                data-collage-cover-frame
+                className={`${gameCoverAspectClass(game.platform)} flex w-full items-center justify-center`}
+              >
+                {game.iconUrl ? (
+                  <img
+                    src={getExportImageUrl(game.iconUrl)}
+                    data-export-src={getExportImageUrl(game.iconUrl)}
+                    data-original-src={normalizeImageUrl(game.iconUrl)}
+                    alt={game.name}
+                    className={`w-full ${gameCoverImageHeightClass(game.platform)} ${gameCoverObjectFit(game.platform)}`}
+                    onError={(event) => handleImageError(event, game.iconUrl)}
+                  />
+                ) : (
+                  <div className="h-full w-full flex items-center justify-center bg-blue-900/50 text-2xl font-bold">{game.name.charAt(0)}</div>
+                )}
+              </div>
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-2 pt-8">
+                <p className="text-xs font-semibold truncate">{game.name}</p>
+                <p className="text-[10px] text-white/70">{game.trophyProgress}% · {formatDuration(game.playtimeSeconds)} · {platformLabel(game.platform)}</p>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {generated && (
-        <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={downloadImage}>
-            <Download className="h-4 w-4 mr-2" />
-            下载高清图片
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={generateCollage}
-            disabled={loading}
-          >
-            <RefreshCw
-              className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`}
-            />
-            重新生成
-          </Button>
-          <span className="text-xs text-muted-foreground">
-            {Math.min(maxGames, playedGamesCount)} 款游戏 ·
-            中心为游戏时长最长的游戏
-          </span>
+      <div className="flex justify-end">
+        <Button variant="outline" size="sm" onClick={downloadCollage} disabled={downloading} className="gap-2">
+          {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          导出拼图
+        </Button>
+      </div>
+      {previewUrl && (
+        <div className="space-y-2">
+          <p className="text-right text-xs text-muted-foreground">导出预览</p>
+          <img src={previewUrl} alt="拼图导出预览" className="w-full rounded-2xl border border-border" />
         </div>
       )}
+      {downloadError && <p className="text-right text-sm text-destructive">{downloadError}</p>}
     </div>
   );
 }

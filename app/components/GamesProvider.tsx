@@ -1,41 +1,50 @@
 "use client";
 
-import { useEffect, ReactNode } from "react";
-import { useSession } from "next-auth/react";
+import { useEffect, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { useGamesStore } from "@/lib/stores/useGamesStore";
 
-/**
- * GamesProvider initializes the Zustand store with user data.
- * It runs once when the user enters the dashboard area.
- */
+const PSN_ID_STORAGE_KEY = "playstation-stats-psn-id";
+
 export function GamesProvider({ children }: { children: ReactNode }) {
-  const { data: session } = useSession();
-  const { setSteamId, initializeData, reset, steamId } = useGamesStore();
+  const router = useRouter();
+  const pathname = usePathname();
+  const psnId = useGamesStore((state) => state.psnId);
+  const setPsnId = useGamesStore((state) => state.setPsnId);
+  const initializeData = useGamesStore((state) => state.initializeData);
+  const reset = useGamesStore((state) => state.reset);
 
-  // Set steamId when session is available
   useEffect(() => {
-    if (session?.user) {
-      // @ts-expect-error - steamId is custom property
-      const userSteamId = session.user.steamId as string;
-      if (userSteamId && userSteamId !== steamId) {
-        setSteamId(userSteamId);
-      }
-    }
-  }, [session, setSteamId, steamId]);
+    const queryId = new URLSearchParams(window.location.search).get("psnId")?.trim();
+    const storedId = window.localStorage.getItem(PSN_ID_STORAGE_KEY)?.trim();
+    const nextId = queryId || storedId;
 
-  // Initialize data when steamId is set
-  useEffect(() => {
-    if (steamId) {
-      initializeData();
+    if (nextId) {
+      window.localStorage.setItem(PSN_ID_STORAGE_KEY, nextId);
+      setPsnId(nextId);
+    } else {
+      router.replace("/");
     }
-  }, [steamId, initializeData]);
+  }, [router, setPsnId]);
 
-  // Reset store on logout
   useEffect(() => {
-    if (!session?.user) {
-      reset();
-    }
-  }, [session, reset]);
+    if (psnId) initializeData();
+  }, [initializeData, psnId]);
+
+  useEffect(() => {
+    if (pathname === "/") reset();
+  }, [pathname, reset]);
+
+  if (!psnId) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return <>{children}</>;
 }
+
+export { PSN_ID_STORAGE_KEY };

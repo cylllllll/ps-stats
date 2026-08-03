@@ -11,7 +11,7 @@ interface I18nContextType {
 
 const I18nContext = createContext<I18nContextType | null>(null);
 
-const STORAGE_KEY = "steam-stats-language";
+const STORAGE_KEY = "playstation-stats-language";
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<Language>("zh");
@@ -21,17 +21,17 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     // Load saved language preference
     const saved = localStorage.getItem(STORAGE_KEY) as Language | null;
     if (saved && (saved === "en" || saved === "zh")) {
-      setLanguageState(saved);
+      window.setTimeout(() => setLanguageState(saved), 0);
     } else {
       // Detect browser language
       const browserLang = navigator.language.toLowerCase();
       if (browserLang.startsWith("zh")) {
-        setLanguageState("zh");
+        window.setTimeout(() => setLanguageState("zh"), 0);
       } else {
-        setLanguageState("en");
+        window.setTimeout(() => setLanguageState("en"), 0);
       }
     }
-    setMounted(true);
+    window.setTimeout(() => setMounted(true), 0);
   }, []);
 
   const setLanguage = useCallback((lang: Language) => {
@@ -69,4 +69,3 @@ export function useI18n() {
 export function interpolate(template: string, values: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_, key) => String(values[key] ?? `{${key}}`));
 }
-

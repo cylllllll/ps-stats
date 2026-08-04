@@ -65,12 +65,12 @@ export default function LibraryPage() {
 
   return (
     <div className="w-full max-w-7xl mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+      <div className="flex items-center justify-between gap-3 sm:gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold">{t.library.title}</h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">{t.library.subtitle}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {fromCache && cacheAge !== null && <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground"><Database className="h-3 w-3" />{Math.round(cacheAge / 60000)} 分钟前缓存</span>}
           <Button variant="outline" size="sm" onClick={() => fetchGames(true)} disabled={refreshing} className="h-8 px-2.5 sm:h-9 sm:px-3"><RefreshCw className={refreshing ? "h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" : "h-3.5 w-3.5 sm:h-4 sm:w-4"} /></Button>
         </div>
@@ -144,8 +144,6 @@ export default function LibraryPage() {
         </div>
         {filteredGames.length === 0 && <div className="py-12 text-center text-muted-foreground text-xs sm:text-sm">{query ? `没有找到“${query}”` : "暂无游戏数据"}</div>}
       </Card>
-
-      {filteredGames.length > 0 && <div className="grid md:grid-cols-3 gap-3 sm:gap-4">{filteredGames.slice(0, 3).map((game, index) => <GameSummary key={game.id} game={game} rank={index + 1} />)}</div>}
     </div>
   );
 }
@@ -171,8 +169,4 @@ function ProgressCell({ game }: { game: PlayStationGame }) {
 
 function TrophyCounts({ game }: { game: PlayStationGame }) {
   return <div className="flex flex-wrap items-center gap-x-2 text-xs"><span className="text-slate-500">{game.earnedTrophies.platinum} 白金</span><span className="text-amber-600">{game.earnedTrophies.gold} 金</span><span className="text-slate-500">{game.earnedTrophies.silver} 银</span><span className="text-orange-600">{game.earnedTrophies.bronze} 铜</span></div>;
-}
-
-function GameSummary({ game, rank }: { game: PlayStationGame; rank: number }) {
-  return <Card className="overflow-hidden"><CardHeader className="p-0"><div className={`${gameCoverAspectClass(game.platform)} flex items-center justify-center bg-muted relative`}><img src={game.iconUrl} alt="" className={`w-full ${gameCoverImageHeightClass(game.platform)} ${gameCoverObjectFit(game.platform)} opacity-80`} /><div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" /><span className="absolute left-3 bottom-2 text-white text-xs font-medium">#{rank} · {game.name}</span></div></CardHeader><CardContent className="p-4 grid grid-cols-2 gap-3 text-sm"><div><p className="text-muted-foreground text-xs">奖杯进度</p><p className="font-semibold">{game.trophyProgress}%</p></div><div><p className="text-muted-foreground text-xs">游玩时长</p><p className="font-semibold">{formatDuration(game.playtimeSeconds)}</p></div><div className="col-span-2"><p className="text-muted-foreground text-xs">启动次数</p><p className="font-semibold">{game.playCount > 0 ? `${game.playCount} 次` : "—"}</p></div><div className="col-span-2"><p className="text-muted-foreground text-xs mb-1">奖杯数量</p><TrophyCounts game={game} /></div><a className="flex items-center gap-1 text-primary text-xs self-end" href={`https://store.playstation.com/search/${encodeURIComponent(game.name)}`} target="_blank" rel="noreferrer">查看商店 <ExternalLink className="h-3 w-3" /></a></CardContent></Card>;
 }

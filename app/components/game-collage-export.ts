@@ -1,4 +1,5 @@
 import type { PlayStationGame } from "@/app/types/playstation";
+import { formatDuration } from "@/lib/playstation";
 
 export interface CollageImageAsset {
   blob: Blob;
@@ -400,6 +401,11 @@ export async function renderGameCollagePoster({
   }
 
   const { placements, rowCount } = placeTiles(games);
+  const totalPlaytimeSeconds = games.reduce(
+    (total, game) => total + game.playtimeSeconds,
+    0
+  );
+  const yearLabel = periodLabel.match(/\d{4}/)?.[0];
   const gridHeight =
     rowCount * GRID_ROW_HEIGHT + Math.max(0, rowCount - 1) * GRID_GAP;
   const posterHeight =
@@ -474,6 +480,17 @@ export async function renderGameCollagePoster({
     fitText(context, periodLabel.toUpperCase(), 280),
     rightX,
     POSTER_PADDING + 50
+  );
+  context.fillStyle = "rgba(255, 255, 255, 0.6)";
+  context.font = `600 11px ${SYSTEM_FONT}`;
+  context.fillText(
+    fitText(
+      context,
+      `${yearLabel ? `${yearLabel} ` : ""}游戏时间 · ${formatDuration(totalPlaytimeSeconds)}`,
+      280
+    ),
+    rightX,
+    POSTER_PADDING + 69
   );
 
   const dividerY = POSTER_PADDING + 80;

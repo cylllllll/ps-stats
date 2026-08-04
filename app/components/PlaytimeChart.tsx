@@ -98,18 +98,38 @@ export default function PlaytimeChart({ games }: { games: PlayStationGame[] }) {
 
         <ChartCard title="平台分布" icon={<Gamepad2 className="h-4 w-4" />}>
           <div className="flex flex-col items-center">
-            <ResponsiveContainer width="100%" height={230}>
-              <PieChart>
+            <ResponsiveContainer width="100%" height={240}>
+              <PieChart margin={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <Pie
                   data={platforms}
                   dataKey="value"
                   nameKey="name"
                   cx="50%"
                   cy="50%"
-                  outerRadius={85}
-                  innerRadius={45}
+                  outerRadius={75}
+                  innerRadius={40}
                   paddingAngle={3}
-                  label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
+                  label={(props) => {
+                    const { x = 0, y = 0, name = "", percent = 0, textAnchor = "start" } = props;
+                    const percentageStr = `${(percent * 100).toFixed(0)}%`;
+                    const isLeft = textAnchor === "end";
+                    return (
+                      <g transform={`translate(${x}, ${y})`}>
+                        <foreignObject
+                          x={isLeft ? -68 : -4}
+                          y={-12}
+                          width={72}
+                          height={24}
+                          style={{ overflow: "visible" }}
+                        >
+                          <div className="flex items-center gap-1 bg-background/95 backdrop-blur-xs border border-border/80 px-1.5 py-0.5 rounded-md shadow-xs text-[10px] whitespace-nowrap">
+                            <PlatformBadge platform={name} />
+                            <span className="font-semibold text-foreground">{percentageStr}</span>
+                          </div>
+                        </foreignObject>
+                      </g>
+                    );
+                  }}
                 >
                   {platforms.map((entry) => (
                     <Cell key={entry.name} fill={PLATFORM_COLORS[entry.name]} />

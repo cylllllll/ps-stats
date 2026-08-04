@@ -113,7 +113,7 @@ export default function DashboardPage() {
           userName={profile?.onlineId || psnId || undefined}
           psnId={psnId || undefined}
           userAvatar={profile?.avatarUrl || undefined}
-          periodLabel="游戏回顾"
+          periodLabel={`${currentYear} · 游戏回顾`}
         />
       )}
 

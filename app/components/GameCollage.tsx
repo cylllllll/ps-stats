@@ -5,6 +5,7 @@ import { Download, Loader2 } from "lucide-react";
 import { toBlob } from "html-to-image";
 import type { PlayStationGame } from "@/app/types/playstation";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { formatDuration, gameCoverAspectClass, gameCoverImageHeightClass, gameCoverObjectFit, isPlayed, platformLabel } from "@/lib/playstation";
 import PlatformBadge from "@/app/components/PlatformBadge";
 
@@ -463,31 +464,38 @@ export default function GameCollage({
   if (topGames.length === 0) return null;
 
   return (
-    <div className="space-y-3">
-      {/* On-Page Dashboard Display Card */}
-      <div className="rounded-2xl border bg-card text-card-foreground p-4 sm:p-5 shadow-sm">
-        <div className="flex items-center justify-between gap-4 mb-4 sm:mb-5">
+    <Card className="overflow-hidden">
+      <CardContent className="p-4 sm:p-5 space-y-4">
+        {/* Header Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-3 min-w-0">
             {userAvatar ? (
               <img
                 src={getExportImageUrl(userAvatar)}
                 alt=""
-                className="h-10 w-10 rounded-full object-cover border border-border"
+                className="h-10 w-10 rounded-full object-cover border border-border shrink-0"
                 onError={(event) => handleImageError(event, userAvatar)}
               />
             ) : (
-              <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold">
+              <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold shrink-0">
                 {(userName || "P").charAt(0).toUpperCase()}
               </div>
             )}
             <div className="min-w-0">
-              <p className="font-semibold truncate text-foreground">{userName || "PlayStation player"}</p>
+              <p className="font-semibold truncate text-foreground text-sm sm:text-base">{userName || "PlayStation player"}</p>
               <p className="text-xs text-muted-foreground truncate">{psnId || "PSN"}</p>
             </div>
           </div>
-          <div className="text-right shrink-0">
-            <p className="text-2xl font-bold text-foreground">{topGames.length}</p>
-            <p className="text-xs font-medium text-muted-foreground">{periodLabel}</p>
+
+          <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+            <div className="text-left sm:text-right">
+              <span className="text-xl sm:text-2xl font-bold text-foreground">{topGames.length}</span>
+              <span className="text-xs font-medium text-muted-foreground ml-2 sm:ml-0 sm:block">{periodLabel}</span>
+            </div>
+            <Button variant="outline" size="sm" onClick={downloadCollage} disabled={downloading} className="gap-2 shrink-0">
+              {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              {downloading ? "正在生成..." : "导出拼图"}
+            </Button>
           </div>
         </div>
 
@@ -519,15 +527,9 @@ export default function GameCollage({
             </div>
           ))}
         </div>
-      </div>
 
-      <div className="flex justify-end">
-        <Button variant="outline" size="sm" onClick={downloadCollage} disabled={downloading} className="gap-2">
-          {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-          {downloading ? "正在生成拼图..." : "导出拼图"}
-        </Button>
-      </div>
-      {downloadError && <p className="text-right text-sm text-destructive font-medium">{downloadError}</p>}
-    </div>
+        {downloadError && <p className="text-right text-sm text-destructive font-medium">{downloadError}</p>}
+      </CardContent>
+    </Card>
   );
 }

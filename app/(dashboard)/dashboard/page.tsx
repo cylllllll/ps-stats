@@ -108,17 +108,13 @@ export default function DashboardPage() {
       </div>
 
       {overviewGames.length > 0 && (
-        <Card className="overflow-hidden">
-          <CardContent className="p-4">
-            <GameCollage
-              games={overviewGames}
-              userName={profile?.onlineId || psnId || undefined}
-              psnId={psnId || undefined}
-              userAvatar={profile?.avatarUrl || undefined}
-              periodLabel="游戏回顾"
-            />
-          </CardContent>
-        </Card>
+        <GameCollage
+          games={overviewGames}
+          userName={profile?.onlineId || psnId || undefined}
+          psnId={psnId || undefined}
+          userAvatar={profile?.avatarUrl || undefined}
+          periodLabel="游戏回顾"
+        />
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

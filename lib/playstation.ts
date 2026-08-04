@@ -101,7 +101,6 @@ export const PLATFORM_DISTRIBUTION_ORDER = [
   "PS5",
   "PS4",
   "PS3",
-  "PS5(PC)",
   "App",
 ] as const;
 
@@ -109,8 +108,8 @@ export type PlatformDistributionLabel =
   (typeof PLATFORM_DISTRIBUTION_ORDER)[number];
 
 /**
- * Collapse the different platform values returned by PSN into the five
- * groups used by the charts page.
+ * Collapse the different platform values returned by PSN into the
+ * groups used by the charts page. PC is categorized under PS5.
  */
 export function platformDistributionLabel(
   platform: string
@@ -128,10 +127,13 @@ export function platformDistributionLabel(
   ) {
     return "App";
   }
-  if (normalized.includes("pspc") || normalized.includes("pc")) {
-    return "PS5(PC)";
+  if (
+    normalized.includes("ps5") ||
+    normalized.includes("pspc") ||
+    normalized.includes("pc")
+  ) {
+    return "PS5";
   }
-  if (normalized.includes("ps5")) return "PS5";
   if (normalized.includes("ps4")) return "PS4";
   if (normalized.includes("ps3")) return "PS3";
 

@@ -467,7 +467,7 @@ export default function GameCollage({
     <Card className="overflow-hidden">
       <CardContent className="p-4 sm:p-5 space-y-4">
         {/* Header Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+        <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             {userAvatar ? (
               <img
@@ -487,15 +487,9 @@ export default function GameCollage({
             </div>
           </div>
 
-          <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
-            <div className="text-left sm:text-right">
-              <span className="text-xl sm:text-2xl font-bold text-foreground">{topGames.length}</span>
-              <span className="text-xs font-medium text-muted-foreground ml-2 sm:ml-0 sm:block">{periodLabel}</span>
-            </div>
-            <Button variant="outline" size="sm" onClick={downloadCollage} disabled={downloading} className="gap-2 shrink-0">
-              {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-              {downloading ? "正在生成..." : "导出拼图"}
-            </Button>
+          <div className="text-right shrink-0">
+            <p className="text-xl sm:text-2xl font-bold text-foreground">{topGames.length}</p>
+            <p className="text-xs font-medium text-muted-foreground">{periodLabel}</p>
           </div>
         </div>
 
@@ -526,6 +520,13 @@ export default function GameCollage({
               </div>
             </div>
           ))}
+        </div>
+
+        <div className="flex justify-end pt-1">
+          <Button variant="outline" size="sm" onClick={downloadCollage} disabled={downloading} className="gap-2">
+            {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            {downloading ? "正在生成..." : "导出拼图"}
+          </Button>
         </div>
 
         {downloadError && <p className="text-right text-sm text-destructive font-medium">{downloadError}</p>}

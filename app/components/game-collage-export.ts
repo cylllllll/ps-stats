@@ -471,15 +471,8 @@ export async function renderGameCollagePoster({
   periodGradient.addColorStop(1, "#818cf8");
   const exportPeriodLabel = periodLabel.replace(/\s*[·•]\s*/g, " • ");
   context.textAlign = "right";
-  context.fillStyle = periodGradient;
-  context.font = `900 36px ${SYSTEM_FONT}`;
-  context.fillText(
-    fitText(context, exportPeriodLabel, 280),
-    rightX,
-    POSTER_PADDING + 39
-  );
   context.fillStyle = "rgba(255, 255, 255, 0.6)";
-  context.font = `600 14px ${SYSTEM_FONT}`;
+  context.font = `600 18px ${SYSTEM_FONT}`;
   context.fillText(
     fitText(
       context,
@@ -487,10 +480,17 @@ export async function renderGameCollagePoster({
       280
     ),
     rightX,
-    POSTER_PADDING + 71
+    POSTER_PADDING + 30
+  );
+  context.fillStyle = periodGradient;
+  context.font = `900 38px ${SYSTEM_FONT}`;
+  context.fillText(
+    fitText(context, exportPeriodLabel, 280),
+    rightX,
+    POSTER_PADDING + 75
   );
 
-  const dividerY = POSTER_PADDING + 80;
+  const dividerY = POSTER_PADDING + 100;
   context.fillStyle = "rgba(255, 255, 255, 0.1)";
   context.fillRect(POSTER_PADDING, dividerY, POSTER_WIDTH - POSTER_PADDING * 2, 1);
 

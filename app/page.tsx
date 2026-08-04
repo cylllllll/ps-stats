@@ -67,14 +67,14 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-left w-full">
-            {[t.landing.feature1Title, t.landing.feature2Title, t.landing.feature3Title].map(
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left w-full">
+            {[t.landing.feature1Title, t.landing.feature2Title].map(
               (title, index) => (
                 <div key={title} className="rounded-2xl bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200/60 dark:border-neutral-800 p-4 shadow-sm">
                   <Sparkles className="h-5 w-5 text-blue-500 dark:text-blue-400 mb-3" />
                   <p className="font-semibold text-neutral-800 dark:text-neutral-200 text-sm sm:text-base">{title}</p>
                   <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                    {[t.landing.feature1Desc, t.landing.feature2Desc, t.landing.feature3Desc][index]}
+                    {[t.landing.feature1Desc, t.landing.feature2Desc][index]}
                   </p>
                 </div>
               )

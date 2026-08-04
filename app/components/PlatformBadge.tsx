@@ -59,7 +59,7 @@ export function PS5Icon({ className = "h-3 w-auto" }: { className?: string }) {
 export function PS3Icon({ className = "h-3 w-auto" }: { className?: string }) {
   return (
     <svg
-      viewBox="0 0 630 135"
+      viewBox="0 -90 630 315"
       className={className}
       fill="currentColor"
       xmlns="http://www.w3.org/2000/svg"

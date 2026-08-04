@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import LoginButton from "../components/LoginButton";
-import ThemeSwitcher from "../components/ThemeSwitcher";
 import { GamesProvider } from "../components/GamesProvider";
 import { LayoutDashboard, List, PieChart, Skull, Clock, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -68,9 +67,8 @@ export default function DashboardLayout({
               })}
             </nav>
 
-            {/* User Info & Theme Switcher */}
+            {/* User Info */}
             <div className="flex items-center gap-1 sm:gap-2">
-              <ThemeSwitcher />
               <LoginButton />
             </div>
           </div>

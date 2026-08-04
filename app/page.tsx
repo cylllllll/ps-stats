@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Gamepad2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import ThemeSwitcher from "./components/ThemeSwitcher";
 import { useI18n } from "@/lib/i18n";
 import { PSN_ID_STORAGE_KEY } from "./components/GamesProvider";
 
@@ -28,10 +27,6 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/40 dark:from-slate-950 dark:via-neutral-900 dark:to-blue-950/40 relative overflow-x-hidden selection:bg-blue-100 dark:selection:bg-blue-900 w-full">
-      <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-20 flex items-center gap-2">
-        <ThemeSwitcher />
-      </div>
-
       <div className="absolute inset-0 -z-10 overflow-hidden">
         <div className="absolute -top-40 -right-40 w-[300px] sm:w-[500px] h-[300px] sm:h-[500px] rounded-full bg-gradient-to-br from-blue-500/35 via-teal-400/25 to-transparent dark:from-blue-900/40 dark:via-teal-900/30 blur-3xl" />
         <div className="absolute -bottom-40 -left-40 w-[350px] sm:w-[600px] h-[350px] sm:h-[600px] rounded-full bg-gradient-to-tr from-red-500/30 via-amber-400/25 to-transparent dark:from-red-900/30 dark:via-amber-900/20 blur-3xl" />
@@ -114,4 +109,3 @@ export default function Home() {
     </main>
   );
 }
-

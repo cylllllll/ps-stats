@@ -8,7 +8,10 @@ import {
   Database,
   Gamepad2,
   Loader2,
+  List,
+  PieChart,
   RefreshCw,
+  Skull,
   Trophy,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -121,9 +124,9 @@ export default function DashboardPage() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <QuickLink href="/library" icon={<Gamepad2 className="h-6 w-6 text-blue-500" />} title="游戏库" detail={`${games.length - libraryAppCount} 款游戏 · ${libraryAppCount} 个 App`} />
-        <QuickLink href="/charts" icon={<Trophy className="h-6 w-6 text-purple-500" />} title="统计图表" detail="游玩与奖杯趋势" />
-        <QuickLink href="/shame" icon={<Trophy className="h-6 w-6 text-red-500" />} title="待完成清单" detail={`${incompleteGames.length} 款未满成就`} />
+        <QuickLink href="/library" icon={<List className="h-6 w-6 text-blue-500" />} title="游戏库" detail={`${games.length - libraryAppCount} 款游戏 · ${libraryAppCount} 个 App`} />
+        <QuickLink href="/charts" icon={<PieChart className="h-6 w-6 text-purple-500" />} title="统计图表" detail="游玩与奖杯趋势" />
+        <QuickLink href="/shame" icon={<Skull className="h-6 w-6 text-red-500" />} title="待完成清单" detail={`${incompleteGames.length} 款未满成就`} />
       </div>
 
       <Card>

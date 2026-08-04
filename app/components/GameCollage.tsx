@@ -120,17 +120,53 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
   }
 }
 
+function getOnPageDataUrl(url: string): string | null {
+  if (typeof document === "undefined") return null;
+  const normalized = normalizeImageUrl(url);
+  if (!normalized) return null;
+
+  const imgs = Array.from(document.querySelectorAll<HTMLImageElement>("img"));
+  for (const img of imgs) {
+    const src = img.src || "";
+    if (src && (src === url || src === normalized || src.includes(encodeURIComponent(normalized)))) {
+      if (img.complete && img.naturalWidth > 0) {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.naturalWidth || 512;
+          canvas.height = img.naturalHeight || 512;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            const dataUrl = canvas.toDataURL("image/png");
+            if (dataUrl && dataUrl.length > 200 && !dataUrl.includes("data:,")) {
+              return dataUrl;
+            }
+          }
+        } catch {
+          // CORS security restriction on canvas.toDataURL
+        }
+      }
+    }
+  }
+  return null;
+}
+
 /**
  * Robust Image-to-DataURL converter with timeout and fallbacks:
- * Tier 1: Proxy URL fetch
- * Tier 2: Direct URL fetch
- * Tier 3: HTMLImageElement + 2D Canvas render
- * Tier 4: EXPORT_PLACEHOLDER fallback (never throws or breaks export pipeline)
+ * Tier 0: On-page rendered image canvas extraction (instant 1ms)
+ * Tier 1: Proxy URL fetch with 12s timeout
+ * Tier 2: Proxy URL fetch retry with default cache
+ * Tier 3: HTMLImageElement + 2D Canvas render via proxy
+ * Tier 4: HTMLImageElement + 2D Canvas render via direct URL
  */
 async function urlToDataUrl(originalUrl: string): Promise<string> {
   const normalized = normalizeImageUrl(originalUrl);
   if (!normalized) return EXPORT_PLACEHOLDER;
   if (normalized.startsWith("data:")) return normalized;
+
+  // Tier 0: On-page rendered image canvas extraction
+  const onPageDataUrl = getOnPageDataUrl(normalized);
+  if (onPageDataUrl) return onPageDataUrl;
 
   const proxyUrl = getExportImageUrl(normalized);
 
@@ -145,10 +181,10 @@ async function urlToDataUrl(originalUrl: string): Promise<string> {
       }
     }
   } catch {
-    // Continue to Tier 1 Retry
+    // Continue to Tier 2
   }
 
-  // Tier 1 Retry: Retry Proxy URL fetch with 15s timeout
+  // Tier 2: Proxy URL fetch retry with default cache
   try {
     const res = await fetchWithTimeout(proxyUrl, { cache: "default" }, 15000);
     if (res.ok) {
@@ -162,7 +198,7 @@ async function urlToDataUrl(originalUrl: string): Promise<string> {
     // Continue
   }
 
-  // Tier 2: HTMLImageElement + 2D Canvas render via proxy
+  // Tier 3: HTMLImageElement + 2D Canvas render via proxy
   try {
     const dataUrl = await imageElementToDataUrl(proxyUrl);
     if (dataUrl && dataUrl !== EXPORT_PLACEHOLDER) return dataUrl;
@@ -170,7 +206,7 @@ async function urlToDataUrl(originalUrl: string): Promise<string> {
     // Continue
   }
 
-  // Tier 3: HTMLImageElement + 2D Canvas render via direct URL
+  // Tier 4: HTMLImageElement + 2D Canvas render via direct URL
   try {
     const dataUrl = await imageElementToDataUrl(normalized);
     if (dataUrl && dataUrl !== EXPORT_PLACEHOLDER) return dataUrl;
@@ -201,6 +237,26 @@ function imageElementToDataUrl(src: string): Promise<string> {
     img.onerror = () => resolve(EXPORT_PLACEHOLDER);
     img.src = src;
   });
+}
+
+async function waitForAllImagesInElement(element: HTMLElement): Promise<void> {
+  const images = Array.from(element.querySelectorAll<HTMLImageElement>("img"));
+  const promises = images.map((img) => {
+    if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      let done = false;
+      const finish = () => {
+        if (!done) {
+          done = true;
+          resolve();
+        }
+      };
+      img.onload = finish;
+      img.onerror = finish;
+      setTimeout(finish, 4000);
+    });
+  });
+  await Promise.all(promises);
 }
 
 /**
@@ -404,8 +460,9 @@ export default function GameCollage({
       exportHost.appendChild(exportPoster);
       document.body.appendChild(exportHost);
 
-      // Give browser a short tick to process layout
-      await wait(100);
+      // Ensure all images appended to DOM have completed loading before rendering canvas
+      await waitForAllImagesInElement(exportPoster);
+      await wait(250);
 
       // 3. Render HD PNG Blob (with pixelRatio 2, falling back to 1.5/1.0 if canvas limits hit)
       let blob: Blob | null = null;

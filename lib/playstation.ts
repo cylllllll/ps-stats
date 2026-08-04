@@ -113,13 +113,12 @@ export type PlatformDistributionLabel =
  */
 export function platformDistributionLabel(
   platform: string
-): PlatformDistributionLabel | null {
-  const normalized = platform
+): PlatformDistributionLabel {
+  const normalized = (platform || "")
     .normalize("NFKC")
     .toLocaleLowerCase()
     .replace(/[\s,_/-]+/g, "");
 
-  if (!normalized) return null;
   if (
     normalized.includes("mediaapp") ||
     normalized === "app" ||
@@ -135,9 +134,16 @@ export function platformDistributionLabel(
     return "PS5";
   }
   if (normalized.includes("ps4")) return "PS4";
-  if (normalized.includes("ps3")) return "PS3";
+  if (
+    normalized.includes("ps3") ||
+    normalized.includes("vita") ||
+    normalized.includes("psp")
+  ) {
+    return "PS3";
+  }
 
-  return null;
+  // Fallback for older legacy titles
+  return "PS3";
 }
 
 const PS4_PLATFORM_PATTERN = /(?:^|[,/\s])ps4(?:$|[,/_\s])/i;

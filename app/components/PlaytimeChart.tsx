@@ -106,30 +106,29 @@ export default function PlaytimeChart({ games }: { games: PlayStationGame[] }) {
                   nameKey="name"
                   cx="50%"
                   cy="50%"
-                  outerRadius={75}
-                  innerRadius={40}
+                  outerRadius={85}
+                  innerRadius={45}
                   paddingAngle={3}
-                  label={(props) => {
-                    const { x = 0, y = 0, name = "", percent = 0, textAnchor = "start" } = props;
-                    const percentageStr = `${(percent * 100).toFixed(0)}%`;
-                    const isLeft = textAnchor === "end";
+                  label={({ cx = 0, cy = 0, midAngle = 0, innerRadius = 0, outerRadius = 0, percent = 0 }) => {
+                    if (!percent || percent < 0.03) return null;
+                    const RADIAN = Math.PI / 180;
+                    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                    const y = cy + radius * Math.sin(-midAngle * RADIAN);
                     return (
-                      <g transform={`translate(${x}, ${y})`}>
-                        <foreignObject
-                          x={isLeft ? -68 : -4}
-                          y={-12}
-                          width={72}
-                          height={24}
-                          style={{ overflow: "visible" }}
-                        >
-                          <div className="flex items-center gap-1 bg-background/95 backdrop-blur-xs border border-border/80 px-1.5 py-0.5 rounded-md shadow-xs text-[10px] whitespace-nowrap">
-                            <PlatformBadge platform={name} />
-                            <span className="font-semibold text-foreground">{percentageStr}</span>
-                          </div>
-                        </foreignObject>
-                      </g>
+                      <text
+                        x={x}
+                        y={y}
+                        fill="#ffffff"
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                        className="text-[11px] font-extrabold select-none pointer-events-none drop-shadow-md"
+                      >
+                        {`${(percent * 100).toFixed(0)}%`}
+                      </text>
                     );
                   }}
+                  labelLine={false}
                 >
                   {platforms.map((entry) => (
                     <Cell key={entry.name} fill={PLATFORM_COLORS[entry.name]} />
@@ -139,14 +138,21 @@ export default function PlaytimeChart({ games }: { games: PlayStationGame[] }) {
               </PieChart>
             </ResponsiveContainer>
 
-            <div className="flex flex-wrap items-center justify-center gap-2 pt-1 pb-2">
+            <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2 pb-2">
               {platforms.map((entry) => (
-                <div key={entry.name} className="flex items-center gap-2 bg-muted/60 px-2.5 py-1 rounded-lg border border-border/50 text-xs">
+                <div
+                  key={entry.name}
+                  className="flex items-center gap-2 bg-muted/60 px-3 py-1.5 rounded-xl border border-border/50 text-xs shadow-2xs"
+                >
+                  <span
+                    className="w-2.5 h-2.5 rounded-full shrink-0"
+                    style={{ backgroundColor: PLATFORM_COLORS[entry.name] }}
+                  />
                   <PlatformBadge platform={entry.name} />
-                  <span className="font-semibold text-foreground">{entry.value} 款</span>
+                  <span className="font-bold text-foreground">{entry.value} 款</span>
                   {totalPlatformGames > 0 && (
                     <span className="text-muted-foreground text-[11px]">
-                      ({((entry.value / totalPlatformGames) * 100).toFixed(0)}%)
+                      ({((entry.value / totalPlatformGames) * 100).toFixed(1)}%)
                     </span>
                   )}
                 </div>

@@ -1,13 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type SyntheticEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { Download, Loader2 } from "lucide-react";
-import { toPng } from "html-to-image";
 import type { PlayStationGame } from "@/app/types/playstation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDuration, isPlayed } from "@/lib/playstation";
 import PlatformBadge from "@/app/components/PlatformBadge";
+import {
+  getCollageProxyUrl,
+  normalizeCollageImageUrl,
+  renderGameCollagePoster,
+  type CollageImageAsset,
+} from "@/app/components/game-collage-export";
 
 interface GameCollageProps {
   games: PlayStationGame[];
@@ -18,410 +28,162 @@ interface GameCollageProps {
   periodLabel?: string;
 }
 
+interface CollageAssetsState {
+  assets: Map<string, CollageImageAsset>;
+  failedUrls: Set<string>;
+  loading: boolean;
+  loadedCount: number;
+  sourceSignature: string;
+  totalCount: number;
+}
+
+const ASSET_CONCURRENCY = 6;
+const EMPTY_ASSET_STATE: CollageAssetsState = {
+  assets: new Map(),
+  failedUrls: new Set(),
+  loading: false,
+  loadedCount: 0,
+  sourceSignature: "",
+  totalCount: 0,
+};
 const EXPORT_PLACEHOLDER = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><rect width="512" height="512" fill="#1e293b"/><path d="M128 352l78-86 56 58 42-48 80 76H128z" fill="#475569"/><circle cx="205" cy="185" r="34" fill="#475569"/></svg>'
 )}`;
 
-function getExportImageUrl(url: string): string {
-  const normalizedUrl = normalizeImageUrl(url);
-  if (
-    !normalizedUrl ||
-    normalizedUrl.startsWith("data:") ||
-    normalizedUrl.startsWith("blob:") ||
-    normalizedUrl.startsWith("/")
-  ) {
-    return normalizedUrl;
-  }
-  return `/api/image-proxy?url=${encodeURIComponent(normalizedUrl)}`;
-}
-
-function normalizeImageUrl(url: string): string {
-  return url.trim().replace(/^http:\/\//i, "https://");
-}
-
-function handleImageError(
-  event: SyntheticEvent<HTMLImageElement>,
-  originalUrl: string
-): void {
-  const image = event.currentTarget;
-
-  if (image.dataset.directFallback === "true") {
-    image.removeAttribute("crossorigin");
-    image.src = EXPORT_PLACEHOLDER;
-    return;
-  }
-
-  image.dataset.directFallback = "true";
-  image.dataset.originalSrc = normalizeImageUrl(originalUrl);
-  image.dataset.exportSrc = getExportImageUrl(originalUrl);
-  image.removeAttribute("crossorigin");
-  image.src = image.dataset.originalSrc;
-}
-
-function wait(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
-}
-
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : EXPORT_PLACEHOLDER);
-    reader.onerror = () => reject(reader.error || new Error("Unable to read image data."));
-    reader.readAsDataURL(blob);
+async function fetchCollageAsset(
+  sourceUrl: string,
+  signal: AbortSignal
+): Promise<Blob> {
+  const response = await fetch(getCollageProxyUrl(sourceUrl), {
+    cache: "force-cache",
+    signal,
   });
-}
 
-function hasBytes(bytes: Uint8Array, offset: number, values: number[]): boolean {
-  return values.every((value, index) => bytes[offset + index] === value);
-}
-
-function hasText(bytes: Uint8Array, text: string, offset = 0): boolean {
-  return text.split("").every((character, index) => bytes[offset + index] === character.charCodeAt(0));
-}
-
-async function getImageMimeType(blob: Blob): Promise<string | null> {
-  const declaredType = blob.type.split(";", 1)[0].toLowerCase();
-  if (declaredType.startsWith("image/")) return declaredType;
-
-  const bytes = new Uint8Array(await blob.slice(0, 64).arrayBuffer());
-  if (hasBytes(bytes, 0, [0xff, 0xd8, 0xff])) return "image/jpeg";
-  if (hasBytes(bytes, 0, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return "image/png";
-  if (hasText(bytes, "GIF8")) return "image/gif";
-  if (hasText(bytes, "RIFF") && hasText(bytes, "WEBP", 8)) return "image/webp";
-
-  const prefix = new TextDecoder().decode(bytes).trimStart().toLowerCase();
-  if (prefix.startsWith("<svg") || (prefix.startsWith("<?xml") && prefix.includes("<svg"))) {
-    return "image/svg+xml";
+  if (!response.ok) {
+    throw new Error(`封面请求失败 (${response.status})`);
   }
 
-  return null;
-}
-
-async function imageBlobToDataUrl(blob: Blob): Promise<string> {
-  const mimeType = await getImageMimeType(blob);
-  if (!mimeType) return EXPORT_PLACEHOLDER;
-
-  const typedBlob = blob.type.toLowerCase().startsWith("image/")
-    ? blob
-    : new Blob([await blob.arrayBuffer()], { type: mimeType });
-  return blobToDataUrl(typedBlob);
-}
-
-async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 4000): Promise<Response> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
-    clearTimeout(timeoutId);
-    return res;
-  } catch (err) {
-    clearTimeout(timeoutId);
-    throw err;
+  const contentType = response.headers.get("content-type")?.toLowerCase() || "";
+  if (!contentType.startsWith("image/")) {
+    throw new Error("封面响应不是图片");
   }
+
+  const blob = await response.blob();
+  if (blob.size === 0) throw new Error("封面响应为空");
+  return blob;
 }
 
-function getOnPageDataUrl(url: string): string | null {
-  if (typeof document === "undefined") return null;
-  const normalized = normalizeImageUrl(url);
-  if (!normalized) return null;
+function useCollageAssets(sourceUrls: string[]) {
+  const sourceSignature = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          sourceUrls
+            .map(normalizeCollageImageUrl)
+            .filter(Boolean)
+        )
+      ).join("\n"),
+    [sourceUrls]
+  );
+  const [retryToken, setRetryToken] = useState(0);
+  const [state, setState] = useState<CollageAssetsState>(EMPTY_ASSET_STATE);
 
-  const imgs = Array.from(document.querySelectorAll<HTMLImageElement>("img"));
-  for (const img of imgs) {
-    const src = img.src || "";
-    if (src && (src === url || src === normalized || src.includes(encodeURIComponent(normalized)))) {
-      if (img.complete && img.naturalWidth > 0) {
+  useEffect(() => {
+    const urls = sourceSignature ? sourceSignature.split("\n") : [];
+    if (urls.length === 0) {
+      setState(EMPTY_ASSET_STATE);
+      return;
+    }
+
+    const controller = new AbortController();
+    const assets = new Map<string, CollageImageAsset>();
+    const failedUrls = new Set<string>();
+    const objectUrls: string[] = [];
+    let active = true;
+    let completedCount = 0;
+    let nextIndex = 0;
+
+    const publish = () => {
+      if (!active) return;
+      setState({
+        assets: new Map(assets),
+        failedUrls: new Set(failedUrls),
+        loading: completedCount < urls.length,
+        loadedCount: assets.size,
+        sourceSignature,
+        totalCount: urls.length,
+      });
+    };
+
+    const worker = async () => {
+      while (active) {
+        const index = nextIndex;
+        nextIndex += 1;
+        if (index >= urls.length) return;
+
+        const sourceUrl = urls[index];
         try {
-          const canvas = document.createElement("canvas");
-          canvas.width = img.naturalWidth || 512;
-          canvas.height = img.naturalHeight || 512;
-          const ctx = canvas.getContext("2d");
-          if (ctx) {
-            ctx.drawImage(img, 0, 0);
-            const dataUrl = canvas.toDataURL("image/png");
-            if (dataUrl && dataUrl.length > 200 && !dataUrl.includes("data:,")) {
-              return dataUrl;
+          const blob = await fetchCollageAsset(sourceUrl, controller.signal);
+          if (!active) return;
+
+          const objectUrl = URL.createObjectURL(blob);
+          objectUrls.push(objectUrl);
+          assets.set(sourceUrl, { blob, objectUrl });
+        } catch (error) {
+          if (!active || (error instanceof Error && error.name === "AbortError")) {
+            return;
+          }
+          failedUrls.add(sourceUrl);
+        } finally {
+          if (active) {
+            completedCount += 1;
+            if (
+              completedCount % ASSET_CONCURRENCY === 0 ||
+              completedCount === urls.length
+            ) {
+              publish();
             }
           }
-        } catch {
-          // CORS security restriction on canvas.toDataURL
         }
-      }
-    }
-  }
-  return null;
-}
-
-/**
- * Robust Image-to-DataURL converter with timeout and fallbacks:
- * Tier 0: On-page rendered image canvas extraction (instant 1ms)
- * Tier 1: Proxy URL fetch with 12s timeout
- * Tier 2: Proxy URL fetch retry with default cache
- * Tier 3: HTMLImageElement + 2D Canvas render via proxy
- * Tier 4: HTMLImageElement + 2D Canvas render via direct URL
- */
-async function urlToDataUrl(originalUrl: string): Promise<string> {
-  const normalized = normalizeImageUrl(originalUrl);
-  if (!normalized) return EXPORT_PLACEHOLDER;
-  if (normalized.startsWith("data:")) return normalized;
-
-  // Tier 0: On-page rendered image canvas extraction
-  const onPageDataUrl = getOnPageDataUrl(normalized);
-  if (onPageDataUrl) return onPageDataUrl;
-
-  const proxyUrl = getExportImageUrl(normalized);
-
-  // Tier 1: Proxy URL fetch with generous 12s timeout
-  try {
-    const res = await fetchWithTimeout(proxyUrl, { cache: "force-cache" }, 12000);
-    if (res.ok) {
-      const blob = await res.blob();
-      if (blob.size > 0) {
-        const dataUrl = await imageBlobToDataUrl(blob);
-        if (dataUrl && dataUrl !== EXPORT_PLACEHOLDER) return dataUrl;
-      }
-    }
-  } catch {
-    // Continue to Tier 2
-  }
-
-  // Tier 2: Proxy URL fetch retry with default cache
-  try {
-    const res = await fetchWithTimeout(proxyUrl, { cache: "default" }, 15000);
-    if (res.ok) {
-      const blob = await res.blob();
-      if (blob.size > 0) {
-        const dataUrl = await imageBlobToDataUrl(blob);
-        if (dataUrl && dataUrl !== EXPORT_PLACEHOLDER) return dataUrl;
-      }
-    }
-  } catch {
-    // Continue
-  }
-
-  // Tier 3: HTMLImageElement + 2D Canvas render via proxy
-  try {
-    const dataUrl = await imageElementToDataUrl(proxyUrl);
-    if (dataUrl && dataUrl !== EXPORT_PLACEHOLDER) return dataUrl;
-  } catch {
-    // Continue
-  }
-
-  // Tier 4: HTMLImageElement + 2D Canvas render via direct URL
-  try {
-    const dataUrl = await imageElementToDataUrl(normalized);
-    if (dataUrl && dataUrl !== EXPORT_PLACEHOLDER) return dataUrl;
-  } catch {
-    // Continue
-  }
-
-  return EXPORT_PLACEHOLDER;
-}
-
-function imageElementToDataUrl(src: string): Promise<string> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = img.naturalWidth || img.width || 512;
-        canvas.height = img.naturalHeight || img.height || 512;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return resolve(EXPORT_PLACEHOLDER);
-        ctx.drawImage(img, 0, 0);
-        resolve(canvas.toDataURL("image/png"));
-      } catch {
-        resolve(EXPORT_PLACEHOLDER);
       }
     };
-    img.onerror = () => resolve(EXPORT_PLACEHOLDER);
-    img.src = src;
-  });
-}
 
-async function waitForAllImagesInElement(element: HTMLElement): Promise<void> {
-  const images = Array.from(element.querySelectorAll<HTMLImageElement>("img"));
-  const promises = images.map((img) => {
-    if (img.complete && img.naturalWidth > 0) return Promise.resolve();
-    return new Promise<void>((resolve) => {
-      let done = false;
-      const finish = () => {
-        if (!done) {
-          done = true;
-          resolve();
-        }
-      };
-      img.onload = finish;
-      img.onerror = finish;
-      setTimeout(finish, 4000);
+    setState({
+      assets: new Map(),
+      failedUrls: new Set(),
+      loading: true,
+      loadedCount: 0,
+      sourceSignature,
+      totalCount: urls.length,
     });
-  });
-  await Promise.all(promises);
+    void Promise.all(
+      Array.from(
+        { length: Math.min(ASSET_CONCURRENCY, urls.length) },
+        () => worker()
+      )
+    ).then(publish);
+
+    return () => {
+      active = false;
+      controller.abort();
+      objectUrls.forEach((objectUrl) => URL.revokeObjectURL(objectUrl));
+    };
+  }, [retryToken, sourceSignature]);
+
+  const retry = useCallback(() => {
+    setState((current) => ({ ...current, loading: true }));
+    setRetryToken((value) => value + 1);
+  }, []);
+
+  return {
+    ...state,
+    loading: state.loading || state.sourceSignature !== sourceSignature,
+    retry,
+  };
 }
 
-/**
- * Preloads all cover images and avatar as Data URLs in memory before creating the export DOM.
- * All images start fetching in parallel immediately for fast, reliable first-time export.
- */
-async function preloadAllImageDataUrls(
-  games: PlayStationGame[],
-  userAvatar?: string
-): Promise<{ avatarDataUrl: string; coverDataUrls: Record<string, string> }> {
-  const coverDataUrls: Record<string, string> = {};
-
-  const avatarPromise = userAvatar ? urlToDataUrl(userAvatar) : Promise.resolve(EXPORT_PLACEHOLDER);
-
-  const coverPromises = games.map(async (game) => {
-    if (!game.iconUrl) return;
-    const dataUrl = await urlToDataUrl(game.iconUrl);
-    if (dataUrl && dataUrl !== EXPORT_PLACEHOLDER) {
-      coverDataUrls[game.id] = dataUrl;
-    }
-  });
-
-  const [avatarDataUrl] = await Promise.all([
-    avatarPromise,
-    Promise.all(coverPromises),
-  ]);
-
-  return { avatarDataUrl, coverDataUrls };
-}
-
-/**
- * Builds an independent offscreen 1200px export poster container.
- * Sized at 1200px width (safe for all WebKit/Safari/Chrome canvas limits).
- */
-function buildExportPoster(
-  topGames: PlayStationGame[],
-  avatarDataUrl: string,
-  coverDataUrls: Record<string, string>,
-  userName?: string,
-  psnId?: string,
-  userAvatar?: string,
-  periodLabel: string = "游戏回顾"
-): HTMLElement {
-  const container = document.createElement("div");
-  container.className = "bg-[#0f172a] text-white p-8 rounded-[32px]";
-  container.style.width = "1200px";
-  container.style.fontFamily = "ui-sans-serif, system-ui, sans-serif";
-
-  // Header
-  const header = document.createElement("div");
-  header.className = "flex items-center justify-between gap-6 mb-8 pb-6 border-b border-white/10";
-
-  const userBox = document.createElement("div");
-  userBox.className = "flex items-center gap-4 min-w-0";
-
-  if (userAvatar && avatarDataUrl !== EXPORT_PLACEHOLDER) {
-    const avatarImg = document.createElement("img");
-    avatarImg.src = avatarDataUrl;
-    avatarImg.className = "h-14 w-14 rounded-full object-cover border-2 border-white/20 shadow-lg";
-    userBox.appendChild(avatarImg);
-  } else {
-    const fallbackAvatar = document.createElement("div");
-    fallbackAvatar.className = "h-14 w-14 rounded-full bg-blue-600 flex items-center justify-center text-xl font-bold text-white shadow-lg";
-    fallbackAvatar.textContent = (userName || "P").charAt(0).toUpperCase();
-    userBox.appendChild(fallbackAvatar);
-  }
-
-  const userDetails = document.createElement("div");
-  userDetails.className = "min-w-0";
-  const nameP = document.createElement("p");
-  nameP.className = "text-xl font-extrabold truncate tracking-tight";
-  nameP.textContent = userName || "PlayStation player";
-  const psnP = document.createElement("p");
-  psnP.className = "text-sm text-white/60 truncate mt-0.5";
-  psnP.textContent = psnId || "PSN";
-  userDetails.appendChild(nameP);
-  userDetails.appendChild(psnP);
-  userBox.appendChild(userDetails);
-
-  const statsBox = document.createElement("div");
-  statsBox.className = "text-right shrink-0";
-  const countP = document.createElement("p");
-  countP.className = "text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400";
-  countP.textContent = String(topGames.length);
-  const periodP = document.createElement("p");
-  periodP.className = "text-[11px] font-semibold uppercase tracking-widest text-white/40 mt-1";
-  periodP.textContent = periodLabel;
-  statsBox.appendChild(countP);
-  statsBox.appendChild(periodP);
-
-  header.appendChild(userBox);
-  header.appendChild(statsBox);
-  container.appendChild(header);
-
-  // Bento Grid (6 Columns, Square 1:1 Tile Units)
-  const maxPlaytimeSeconds = topGames[0]?.playtimeSeconds || 0;
-  const grid = document.createElement("div");
-  grid.style.display = "grid";
-  grid.style.gridTemplateColumns = "repeat(6, minmax(0, 1fr))";
-  grid.style.gap = "16px";
-  grid.style.gridAutoRows = "180px";
-  grid.style.gridAutoFlow = "dense";
-
-  topGames.forEach((game, index) => {
-    const tile = document.createElement("div");
-    tile.className = "relative min-w-0 overflow-hidden rounded-2xl bg-slate-800/80 shadow-md flex items-center justify-center";
-
-    // Playtime Size Hierarchy:
-    // Top 1: 3x3 Giant Square (or 2x2 if small list)
-    // Top 2-4: 2x2 Medium Square
-    // Others: 1x1 Standard Square
-    const ratio = maxPlaytimeSeconds > 0 ? game.playtimeSeconds / maxPlaytimeSeconds : 0;
-
-    if (index === 0) {
-      if (topGames.length >= 7) {
-        tile.style.gridColumn = "span 3";
-        tile.style.gridRow = "span 3";
-      } else {
-        tile.style.gridColumn = "span 2";
-        tile.style.gridRow = "span 2";
-      }
-    } else if (index >= 1 && index <= 3 && ratio >= 0.2) {
-      tile.style.gridColumn = "span 2";
-      tile.style.gridRow = "span 2";
-    } else {
-      tile.style.gridColumn = "span 1";
-      tile.style.gridRow = "span 1";
-    }
-
-    const coverDataUrl = coverDataUrls[game.id] || (game.iconUrl ? getExportImageUrl(game.iconUrl) : null);
-    if (coverDataUrl) {
-      // Pure edge-to-edge square cover image
-      const img = document.createElement("img");
-      img.src = coverDataUrl;
-      img.alt = game.name;
-      img.className = "w-full h-full object-cover object-center rounded-2xl";
-      tile.appendChild(img);
-    } else {
-      const fallback = document.createElement("div");
-      fallback.className = "w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-4 text-center";
-      const charSpan = document.createElement("span");
-      charSpan.className = "text-3xl font-extrabold text-white/80";
-      charSpan.textContent = game.name.charAt(0);
-      fallback.appendChild(charSpan);
-      tile.appendChild(fallback);
-    }
-
-    grid.appendChild(tile);
-  });
-
-  container.appendChild(grid);
-  return container;
-}
-
-function dataUrlToBlob(dataUrl: string): Blob {
-  const parts = dataUrl.split(",");
-  const mimeMatch = parts[0].match(/:(.*?);/);
-  const mime = mimeMatch ? mimeMatch[1] : "image/png";
-  const binary = atob(parts[1]);
-  let length = binary.length;
-  const buffer = new Uint8Array(length);
-  while (length--) {
-    buffer[length] = binary.charCodeAt(length);
-  }
-  return new Blob([buffer], { type: mime });
+function setPlaceholderOnError(image: HTMLImageElement): void {
+  if (image.src !== EXPORT_PLACEHOLDER) image.src = EXPORT_PLACEHOLDER;
 }
 
 export default function GameCollage({
@@ -438,93 +200,68 @@ export default function GameCollage({
   const topGames = useMemo(() => {
     const rankedGames = [...games]
       .filter(isPlayed)
-      .sort((a, b) => b.playtimeSeconds - a.playtimeSeconds || b.trophyProgress - a.trophyProgress);
-    return maxGames === undefined ? rankedGames : rankedGames.slice(0, maxGames);
+      .sort(
+        (a, b) =>
+          b.playtimeSeconds - a.playtimeSeconds ||
+          b.trophyProgress - a.trophyProgress
+      );
+    return maxGames === undefined
+      ? rankedGames
+      : rankedGames.slice(0, maxGames);
   }, [games, maxGames]);
+
+  const assetSources = useMemo(
+    () => [
+      ...(userAvatar ? [userAvatar] : []),
+      ...topGames.map((game) => game.iconUrl).filter(Boolean),
+    ],
+    [topGames, userAvatar]
+  );
+  const collageAssets = useCollageAssets(assetSources);
+
+  const failedCoverCount = useMemo(
+    () =>
+      topGames.filter((game) => {
+        const sourceUrl = normalizeCollageImageUrl(game.iconUrl || "");
+        return sourceUrl && collageAssets.failedUrls.has(sourceUrl);
+      }).length,
+    [collageAssets.failedUrls, topGames]
+  );
 
   const downloadCollage = async () => {
     if (topGames.length === 0) return;
+
+    if (failedCoverCount > 0) {
+      setDownloadError(
+        `${failedCoverCount} 张封面加载失败，正在重新加载；完成后请再次导出。`
+      );
+      collageAssets.retry();
+      return;
+    }
+
     setDownloading(true);
     setDownloadError(null);
 
-    let exportHost: HTMLDivElement | null = null;
     try {
-      // 1. Preload ALL images as Data URLs in memory FIRST with 4-tier fallback
-      const { avatarDataUrl, coverDataUrls } = await preloadAllImageDataUrls(topGames, userAvatar);
-
-      // 2. Build independent 1200px poster container using fully loaded Data URLs
-      const exportPoster = buildExportPoster(
-        topGames,
-        avatarDataUrl,
-        coverDataUrls,
-        userName,
+      const result = await renderGameCollagePoster({
+        assets: collageAssets.assets,
+        games: topGames,
+        periodLabel,
         psnId,
         userAvatar,
-        periodLabel
-      );
+        userName,
+      });
 
-      // Mount inside viewport with opacity 0.01 so WebKit/Safari fully decodes and renders images
-      exportHost = document.createElement("div");
-      exportHost.style.position = "fixed";
-      exportHost.style.left = "0px";
-      exportHost.style.top = "0px";
-      exportHost.style.width = "1200px";
-      exportHost.style.opacity = "0.01";
-      exportHost.style.zIndex = "-9999";
-      exportHost.style.pointerEvents = "none";
-      exportHost.appendChild(exportPoster);
-      document.body.appendChild(exportHost);
-
-      // Ensure all images appended to DOM have completed loading before rendering canvas
-      await waitForAllImagesInElement(exportPoster);
-      await wait(300);
-
-      // 3. Render HD PNG Data URL (with pixelRatio 2, falling back to 1.5/1.0 if canvas limits hit)
-      let dataUrl = "";
-
-      try {
-        dataUrl = await toPng(exportPoster, {
-          cacheBust: false,
-          pixelRatio: 2,
-          backgroundColor: "#0f172a",
-          skipFonts: true,
-          imagePlaceholder: EXPORT_PLACEHOLDER,
-          onImageErrorHandler: () => undefined,
-        });
-      } catch (err) {
-        console.warn("toPng pixelRatio 2 failed, trying pixelRatio 1.5:", err);
+      if (result.missingCoverNames.length > 0) {
+        const examples = result.missingCoverNames.slice(0, 3).join("、");
+        throw new Error(
+          `${result.missingCoverNames.length} 张封面无法解码（${examples}${
+            result.missingCoverNames.length > 3 ? "等" : ""
+          }），已停止生成空封面的图片。`
+        );
       }
 
-      if (!dataUrl || dataUrl.length < 500) {
-        await wait(150);
-        dataUrl = await toPng(exportPoster, {
-          cacheBust: true,
-          pixelRatio: 1.5,
-          backgroundColor: "#0f172a",
-          skipFonts: true,
-          imagePlaceholder: EXPORT_PLACEHOLDER,
-          onImageErrorHandler: () => undefined,
-        });
-      }
-
-      if (!dataUrl || dataUrl.length < 500) {
-        dataUrl = await toPng(exportPoster, {
-          cacheBust: true,
-          pixelRatio: 1,
-          backgroundColor: "#0f172a",
-          skipFonts: true,
-          imagePlaceholder: EXPORT_PLACEHOLDER,
-          onImageErrorHandler: () => undefined,
-        });
-      }
-
-      if (!dataUrl || dataUrl.length < 500) {
-        throw new Error("拼图生成结果为空，请检查网络或刷新页面后重试。");
-      }
-
-      // 4. Trigger direct download
-      const blob = dataUrlToBlob(dataUrl);
-      const objectUrl = URL.createObjectURL(blob);
+      const objectUrl = URL.createObjectURL(result.blob);
       const link = document.createElement("a");
       link.download = `playstation-collage-${psnId || "stats"}.png`;
       link.href = objectUrl;
@@ -532,32 +269,33 @@ export default function GameCollage({
       document.body.appendChild(link);
       link.click();
       link.remove();
-      setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 10_000);
     } catch (error) {
       console.error("Unable to export collage:", error);
-      const errMsg = error instanceof Error ? error.message : String(error);
-      setDownloadError(`拼图导出失败: ${errMsg}`);
+      const message = error instanceof Error ? error.message : String(error);
+      setDownloadError(`拼图导出失败：${message}`);
     } finally {
-      exportHost?.remove();
       setDownloading(false);
     }
   };
 
   if (topGames.length === 0) return null;
 
+  const avatarAsset = userAvatar
+    ? collageAssets.assets.get(normalizeCollageImageUrl(userAvatar))
+    : undefined;
+
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-4 sm:p-5 space-y-4">
-        {/* Header Bar */}
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            {userAvatar ? (
+            {avatarAsset ? (
               <img
-                src={getExportImageUrl(userAvatar)}
+                src={avatarAsset.objectUrl}
                 alt=""
-                crossOrigin="anonymous"
                 className="h-10 w-10 rounded-full object-cover border border-border shrink-0"
-                onError={(event) => handleImageError(event, userAvatar)}
+                onError={(event) => setPlaceholderOnError(event.currentTarget)}
               />
             ) : (
               <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold shrink-0">
@@ -565,56 +303,97 @@ export default function GameCollage({
               </div>
             )}
             <div className="min-w-0">
-              <p className="font-semibold truncate text-foreground text-sm sm:text-base">{userName || "PlayStation player"}</p>
-              <p className="text-xs text-muted-foreground truncate">{psnId || "PSN"}</p>
+              <p className="font-semibold truncate text-foreground text-sm sm:text-base">
+                {userName || "PlayStation player"}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                {psnId || "PSN"}
+              </p>
             </div>
           </div>
 
           <div className="text-right shrink-0">
-            <p className="text-xl sm:text-2xl font-bold text-foreground">{topGames.length}</p>
-            <p className="text-xs font-medium text-muted-foreground">{periodLabel}</p>
+            <p className="text-xl sm:text-2xl font-bold text-foreground">
+              {topGames.length}
+            </p>
+            <p className="text-xs font-medium text-muted-foreground">
+              {periodLabel}
+            </p>
           </div>
         </div>
 
-        {/* Dashboard Preview Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-          {topGames.map((game) => (
-            <div
-              key={game.id}
-              className="group relative flex flex-col items-center justify-center min-w-0 rounded-xl overflow-hidden bg-muted"
-            >
-              <div className="aspect-square relative w-full overflow-hidden bg-muted">
-                <img
-                  src={game.iconUrl ? getExportImageUrl(game.iconUrl) : EXPORT_PLACEHOLDER}
-                  alt={game.name}
-                  crossOrigin="anonymous"
-                  className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                  loading="eager"
-                  onError={(event) => handleImageError(event, game.iconUrl || "")}
-                />
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-2 pt-6">
-                  <p className="text-xs font-semibold text-white truncate">{game.name}</p>
-                  <div className="flex items-center gap-1 text-[10px] text-white/80 mt-0.5">
-                    <PlatformBadge platform={game.platform} className="px-1 py-0 text-[9px] bg-white/20 text-white border-0" />
-                    <span>·</span>
-                    <span>{game.trophyProgress}%</span>
-                    <span>·</span>
-                    <span>{formatDuration(game.playtimeSeconds)}</span>
+          {topGames.map((game) => {
+            const coverAsset = game.iconUrl
+              ? collageAssets.assets.get(
+                  normalizeCollageImageUrl(game.iconUrl)
+                )
+              : undefined;
+
+            return (
+              <div
+                key={game.id}
+                className="group relative flex flex-col items-center justify-center min-w-0 rounded-xl overflow-hidden bg-muted"
+              >
+                <div className="aspect-square relative w-full overflow-hidden bg-muted">
+                  <img
+                    src={coverAsset?.objectUrl || EXPORT_PLACEHOLDER}
+                    alt={game.name}
+                    className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                    loading="eager"
+                    onError={(event) =>
+                      setPlaceholderOnError(event.currentTarget)
+                    }
+                  />
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-2 pt-6">
+                    <p className="text-xs font-semibold text-white truncate">
+                      {game.name}
+                    </p>
+                    <div className="flex items-center gap-1 text-[10px] text-white/80 mt-0.5">
+                      <PlatformBadge
+                        platform={game.platform}
+                        className="px-1 py-0 text-[9px] bg-white/20 text-white border-0"
+                      />
+                      <span>·</span>
+                      <span>{game.trophyProgress}%</span>
+                      <span>·</span>
+                      <span>{formatDuration(game.playtimeSeconds)}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="flex justify-end pt-1">
-          <Button variant="outline" size="sm" onClick={downloadCollage} disabled={downloading} className="gap-2">
-            {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-            {downloading ? "正在生成..." : "导出拼图"}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={downloadCollage}
+            disabled={downloading || collageAssets.loading}
+            className="gap-2"
+          >
+            {downloading || collageAssets.loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            {downloading
+              ? "正在生成..."
+              : collageAssets.loading
+                ? `正在加载素材 ${collageAssets.loadedCount}/${collageAssets.totalCount}`
+                : failedCoverCount > 0
+                  ? "重试封面"
+                  : "导出拼图"}
           </Button>
         </div>
 
-        {downloadError && <p className="text-right text-sm text-destructive font-medium">{downloadError}</p>}
+        {downloadError && (
+          <p className="text-right text-sm text-destructive font-medium">
+            {downloadError}
+          </p>
+        )}
       </CardContent>
     </Card>
   );

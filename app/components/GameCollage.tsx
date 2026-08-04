@@ -539,6 +539,7 @@ export default function GameCollage({
               <img
                 src={getExportImageUrl(userAvatar)}
                 alt=""
+                crossOrigin="anonymous"
                 className="h-10 w-10 rounded-full object-cover border border-border shrink-0"
                 onError={(event) => handleImageError(event, userAvatar)}
               />
@@ -568,10 +569,12 @@ export default function GameCollage({
             >
               <div className={`${gameCoverAspectClass(game.platform)} relative w-full overflow-hidden bg-muted`}>
                 <img
-                  src={game.iconUrl || EXPORT_PLACEHOLDER}
+                  src={game.iconUrl ? getExportImageUrl(game.iconUrl) : EXPORT_PLACEHOLDER}
                   alt={game.name}
+                  crossOrigin="anonymous"
                   className={`w-full ${gameCoverImageHeightClass(game.platform)} ${gameCoverObjectFit(game.platform)} transition-transform group-hover:scale-105`}
-                  loading="lazy"
+                  loading="eager"
+                  onError={(event) => handleImageError(event, game.iconUrl || "")}
                 />
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-2 pt-6">
                   <p className="text-xs font-semibold text-white truncate">{game.name}</p>

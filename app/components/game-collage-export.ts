@@ -470,24 +470,33 @@ export async function renderGameCollagePoster({
   periodGradient.addColorStop(0, "#60a5fa");
   periodGradient.addColorStop(1, "#818cf8");
   const exportPeriodLabel = periodLabel.replace(/\s*[·•]\s*/g, " • ");
+  const summaryText = `${formatDuration(totalPlaytimeSeconds)} • ${games.length} 款游戏`;
+  const summaryY = POSTER_PADDING + 4;
+  const summaryHeight = 34;
   context.textAlign = "right";
-  context.fillStyle = "rgba(255, 255, 255, 0.6)";
   context.font = `600 18px ${SYSTEM_FONT}`;
+  const fittedSummary = fitText(context, summaryText, 252);
+  const summaryWidth = Math.min(280, context.measureText(fittedSummary).width + 28);
+  const summaryX = rightX - summaryWidth;
+  roundedRectPath(context, summaryX, summaryY, summaryWidth, summaryHeight, 17);
+  context.fillStyle = "rgba(96, 165, 250, 0.14)";
+  context.fill();
+  context.strokeStyle = "rgba(129, 140, 248, 0.4)";
+  context.lineWidth = 1;
+  context.stroke();
+  context.fillStyle = "rgba(255, 255, 255, 0.82)";
+  context.font = `700 16px ${SYSTEM_FONT}`;
   context.fillText(
-    fitText(
-      context,
-      `${formatDuration(totalPlaytimeSeconds)} • ${games.length} 款游戏`,
-      280
-    ),
-    rightX,
-    POSTER_PADDING + 30
+    fittedSummary,
+    rightX - 14,
+    summaryY + 23
   );
   context.fillStyle = periodGradient;
   context.font = `900 38px ${SYSTEM_FONT}`;
   context.fillText(
     fitText(context, exportPeriodLabel, 280),
     rightX,
-    POSTER_PADDING + 75
+    POSTER_PADDING + 78
   );
 
   const dividerY = POSTER_PADDING + 100;

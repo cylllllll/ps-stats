@@ -352,16 +352,8 @@ export default function GameCollage({
   maxGames,
   periodLabel = "all titles",
 }: GameCollageProps) {
-  const previewUrlRef = useRef<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
-    };
-  }, []);
 
   const topGames = useMemo(() => {
     const rankedGames = [...games]
@@ -447,12 +439,8 @@ export default function GameCollage({
         throw new Error("拼图生成结果为空，请检查网络或刷新页面后重试。");
       }
 
-      // 4. ONLY AFTER image generation cleanly succeeds: trigger download dialog!
+      // 4. Trigger direct download
       const objectUrl = URL.createObjectURL(blob);
-      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
-      previewUrlRef.current = objectUrl;
-      setPreviewUrl(objectUrl);
-
       const link = document.createElement("a");
       link.download = `playstation-collage-${psnId || "stats"}.png`;
       link.href = objectUrl;
@@ -460,6 +448,7 @@ export default function GameCollage({
       document.body.appendChild(link);
       link.click();
       link.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
     } catch (error) {
       console.error("Unable to export collage:", error);
       const errMsg = error instanceof Error ? error.message : String(error);
@@ -531,12 +520,6 @@ export default function GameCollage({
           {downloading ? "正在生成拼图..." : "导出拼图"}
         </Button>
       </div>
-      {previewUrl && (
-        <div className="space-y-2">
-          <p className="text-right text-xs text-muted-foreground">导出预览</p>
-          <img src={previewUrl} alt="拼图导出预览" className="w-full rounded-2xl border border-border" />
-        </div>
-      )}
       {downloadError && <p className="text-right text-sm text-destructive font-medium">{downloadError}</p>}
     </div>
   );

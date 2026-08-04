@@ -18,9 +18,13 @@ interface CollagePosterOptions {
   assets: ReadonlyMap<string, CollageImageAsset>;
   games: PlayStationGame[];
   periodLabel: string;
+  gamesLabel?: string;
+  noDurationLabel?: string;
   psnId?: string;
   userAvatar?: string;
   userName?: string;
+  fallbackPlayer?: string;
+  fallbackPsn?: string;
 }
 
 interface TilePlacement {
@@ -388,9 +392,13 @@ export async function renderGameCollagePoster({
   assets,
   games,
   periodLabel,
+  gamesLabel = "款游戏",
+  noDurationLabel,
   psnId,
   userAvatar,
   userName,
+  fallbackPlayer = "PlayStation player",
+  fallbackPsn = "PSN",
 }: CollagePosterOptions): Promise<CollagePosterResult> {
   if (games.length === 0) {
     throw new Error("没有可导出的游戏。");
@@ -453,14 +461,14 @@ export async function renderGameCollagePoster({
   context.fillStyle = "#ffffff";
   context.font = `800 20px ${SYSTEM_FONT}`;
   context.fillText(
-    fitText(context, userName || "PlayStation player", 760),
+    fitText(context, userName || fallbackPlayer, 760),
     userTextX,
     POSTER_PADDING + 24
   );
   context.fillStyle = "rgba(255, 255, 255, 0.6)";
   context.font = `400 14px ${SYSTEM_FONT}`;
   context.fillText(
-    fitText(context, psnId || "PSN", 760),
+    fitText(context, psnId || fallbackPsn, 760),
     userTextX,
     POSTER_PADDING + 48
   );
@@ -470,7 +478,7 @@ export async function renderGameCollagePoster({
   periodGradient.addColorStop(0, "#60a5fa");
   periodGradient.addColorStop(1, "#818cf8");
   const exportPeriodLabel = periodLabel.replace(/\s*[·•]\s*/g, " • ");
-  const summaryText = `${formatDuration(totalPlaytimeSeconds)} • ${games.length} 款游戏`;
+  const summaryText = `${formatDuration(totalPlaytimeSeconds, noDurationLabel)} • ${games.length} ${gamesLabel}`;
   context.textAlign = "right";
   context.fillStyle = periodGradient;
   context.font = `900 38px ${SYSTEM_FONT}`;

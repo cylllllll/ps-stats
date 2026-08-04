@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "./components/Providers";
+import SiteFooter from "./components/SiteFooter";
 import { Analytics } from "@vercel/analytics/next";
 
 export const viewport: Viewport = {
@@ -24,27 +25,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
+    <html lang="zh-CN" data-scroll-behavior="smooth" suppressHydrationWarning>
       <body
         className="font-sans antialiased min-h-screen flex flex-col"
       >
         <Providers>
           <div className="flex-1">{children}</div>
+          <SiteFooter />
         </Providers>
-        <footer className="border-t border-border/40 py-6 mt-auto">
-          <div className="container mx-auto px-4 flex items-center justify-center gap-2 text-sm text-muted-foreground">
-            <a
-              href="https://t.me/PlayStationNewssss"
-              target="_blank"
-              rel="noreferrer"
-              className="hover:text-foreground hover:underline"
-            >
-              PlayStation 新闻转发
-            </a>
-            <span className="text-border">•</span>
-            <span>Built with ❤️</span>
-          </div>
-        </footer>
         <Analytics />
       </body>
     </html>

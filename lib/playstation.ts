@@ -69,8 +69,8 @@ export function activityTimestamp(game: PlayStationGame): number {
   return Math.max(game.lastPlayedAt, game.lastTrophyAt);
 }
 
-export function formatDuration(seconds: number): string {
-  if (seconds <= 0) return "暂无时长";
+export function formatDuration(seconds: number, noDurationLabel = "暂无时长"): string {
+  if (seconds <= 0) return noDurationLabel;
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   if (hours === 0) return `${minutes}m`;

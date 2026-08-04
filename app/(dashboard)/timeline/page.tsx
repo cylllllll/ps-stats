@@ -3,8 +3,10 @@
 import { useGamesStore } from "@/lib/stores/useGamesStore";
 import GameTimeline from "@/app/components/GameTimeline";
 import { Loader2 } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 export default function TimelinePage() {
+  const { t } = useI18n();
   const games = useGamesStore((s) => s.games);
   const loading = useGamesStore((s) => s.gamesLoading);
 
@@ -19,9 +21,9 @@ export default function TimelinePage() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold">游戏时间线</h1>
+        <h1 className="text-2xl font-bold">{t.timeline.title}</h1>
         <p className="text-muted-foreground mt-1">
-          重温你的游戏历程
+          {t.timeline.subtitle}
         </p>
       </div>
 

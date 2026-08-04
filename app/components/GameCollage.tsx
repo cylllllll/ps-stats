@@ -11,6 +11,7 @@ import type { PlayStationGame } from "@/app/types/playstation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDuration, isPlayed } from "@/lib/playstation";
+import { interpolate, useI18n } from "@/lib/i18n";
 import PlatformBadge from "@/app/components/PlatformBadge";
 import {
   getCollageProxyUrl,
@@ -192,8 +193,9 @@ export default function GameCollage({
   psnId,
   userAvatar,
   maxGames,
-  periodLabel = "游戏回顾",
+  periodLabel,
 }: GameCollageProps) {
+  const { t } = useI18n();
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
@@ -233,7 +235,7 @@ export default function GameCollage({
 
     if (failedCoverCount > 0) {
       setDownloadError(
-        `${failedCoverCount} 张封面加载失败，正在重新加载；完成后请再次导出。`
+        interpolate(t.collage.coverLoadFailed, { count: failedCoverCount })
       );
       collageAssets.retry();
       return;
@@ -246,19 +248,23 @@ export default function GameCollage({
       const result = await renderGameCollagePoster({
         assets: collageAssets.assets,
         games: topGames,
-        periodLabel,
+        periodLabel: periodLabel || t.collage.defaultPeriod,
+        gamesLabel: t.common.games,
+        noDurationLabel: t.common.noDuration,
         psnId,
         userAvatar,
         userName,
+        fallbackPlayer: t.collage.fallbackPlayer,
+        fallbackPsn: t.collage.fallbackPsn,
       });
 
       if (result.missingCoverNames.length > 0) {
         const examples = result.missingCoverNames.slice(0, 3).join("、");
-        throw new Error(
-          `${result.missingCoverNames.length} 张封面无法解码（${examples}${
-            result.missingCoverNames.length > 3 ? "等" : ""
-          }），已停止生成空封面的图片。`
-        );
+        throw new Error(interpolate(t.collage.coverDecodeFailed, {
+          count: result.missingCoverNames.length,
+          examples,
+          suffix: result.missingCoverNames.length > 3 ? "…" : "",
+        }));
       }
 
       const objectUrl = URL.createObjectURL(result.blob);
@@ -273,7 +279,7 @@ export default function GameCollage({
     } catch (error) {
       console.error("Unable to export collage:", error);
       const message = error instanceof Error ? error.message : String(error);
-      setDownloadError(`拼图导出失败：${message}`);
+      setDownloadError(interpolate(t.collage.exportFailed, { message }));
     } finally {
       setDownloading(false);
     }
@@ -304,10 +310,10 @@ export default function GameCollage({
             )}
             <div className="min-w-0">
               <p className="font-semibold truncate text-foreground text-sm sm:text-base">
-                {userName || "PlayStation player"}
+                {userName || t.collage.fallbackPlayer}
               </p>
               <p className="text-xs text-muted-foreground truncate">
-                {psnId || "PSN"}
+                {psnId || t.collage.fallbackPsn}
               </p>
             </div>
           </div>
@@ -317,7 +323,7 @@ export default function GameCollage({
               {topGames.length}
             </p>
             <p className="text-xs font-medium text-muted-foreground">
-              {periodLabel}
+              {periodLabel || t.collage.defaultPeriod}
             </p>
           </div>
         </div>
@@ -357,7 +363,7 @@ export default function GameCollage({
                       <span>·</span>
                       <span>{game.trophyProgress}%</span>
                       <span>·</span>
-                      <span>{formatDuration(game.playtimeSeconds)}</span>
+                      <span>{formatDuration(game.playtimeSeconds, t.common.noDuration)}</span>
                     </div>
                   </div>
                 </div>
@@ -380,12 +386,12 @@ export default function GameCollage({
               <Download className="h-4 w-4" />
             )}
             {downloading
-              ? "正在生成..."
+              ? t.collage.generating
               : collageAssets.loading
-                ? `正在加载素材 ${collageAssets.loadedCount}/${collageAssets.totalCount}`
+                ? interpolate(t.collage.loadingAssets, { loaded: collageAssets.loadedCount, total: collageAssets.totalCount })
                 : failedCoverCount > 0
-                  ? "重试封面"
-                  : "导出拼图"}
+                  ? t.collage.retryCovers
+                  : t.collage.export}
           </Button>
         </div>
 

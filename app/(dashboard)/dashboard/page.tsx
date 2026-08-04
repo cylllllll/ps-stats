@@ -20,8 +20,10 @@ import { useGamesStore } from "@/lib/stores/useGamesStore";
 import { formatDate, formatDuration, hasTrophyData, incompleteTrophyGames, isAppPlatform, isPlayedInYear } from "@/lib/playstation";
 import GameCollage from "@/app/components/GameCollage";
 import PlatformBadge from "@/app/components/PlatformBadge";
+import { interpolate, useI18n } from "@/lib/i18n";
 
 export default function DashboardPage() {
+  const { t } = useI18n();
   const games = useGamesStore((state) => state.games);
   const profile = useGamesStore((state) => state.profile);
   const psnId = useGamesStore((state) => state.psnId);
@@ -56,7 +58,9 @@ export default function DashboardPage() {
 
   const formatCacheAge = (milliseconds: number) => {
     const minutes = Math.floor(milliseconds / 1000 / 60);
-    return minutes < 1 ? "刚刚" : `${minutes} 分钟前`;
+    return minutes < 1
+      ? t.common.justNow
+      : `${minutes} ${t.common.minutesAgo}`;
   };
 
   if (loading) {
@@ -64,7 +68,7 @@ export default function DashboardPage() {
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-muted-foreground">正在读取 PlayStation 数据…</p>
+          <p className="text-muted-foreground">{t.dashboard.loading}</p>
         </div>
       </div>
     );
@@ -74,11 +78,11 @@ export default function DashboardPage() {
     return (
       <div className="max-w-xl mx-auto px-4 py-20 text-center">
         <Gamepad2 className="h-12 w-12 mx-auto text-destructive mb-4" />
-        <h1 className="text-2xl font-bold mb-2">无法读取这个 PSN 资料</h1>
+        <h1 className="text-2xl font-bold mb-2">{t.dashboard.loadErrorTitle}</h1>
         <p className="text-muted-foreground mb-6">{error}</p>
         <Button onClick={() => fetchGames(true)} disabled={refreshing}>
           <RefreshCw className={refreshing ? "animate-spin" : ""} />
-          重试
+          {t.common.retry}
         </Button>
       </div>
     );
@@ -88,9 +92,12 @@ export default function DashboardPage() {
     <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 space-y-8">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">PlayStation 概览</h1>
+          <h1 className="text-2xl font-bold">{t.dashboard.title}</h1>
           <p className="text-muted-foreground">
-            {profile?.onlineId || psnId} 的 {currentYear} 年游玩与奖杯数据
+            {interpolate(t.dashboard.subtitle, {
+              name: profile?.onlineId || psnId || "PSN",
+              year: currentYear,
+            })}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -107,10 +114,10 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title={`${currentYear} 游玩时长`} value={formatDuration(totalPlaytime)} icon={<Clock className="h-4 w-4 text-blue-500" />} className="from-blue-500/10 to-purple-500/10 border-blue-500/20" />
-        <StatCard title="今年项目数" value={overviewGames.length.toLocaleString()} detail={`${overviewGameCount} 款游戏 · ${overviewAppCount} 个 App`} icon={<Gamepad2 className="h-4 w-4 text-green-500" />} className="from-green-500/10 to-emerald-500/10 border-green-500/20" />
-        <StatCard title="今年奖杯数" value={earnedTrophies.toLocaleString()} icon={<Trophy className="h-4 w-4 text-amber-500" />} className="from-amber-500/10 to-orange-500/10 border-amber-500/20" />
-        <StatCard title="今年最近活动" value={recentGames[0]?.name || "暂无记录"} detail={recentGames[0] ? formatDate(Math.max(recentGames[0].lastPlayedAt, recentGames[0].lastTrophyAt)) : ""} icon={<Calendar className="h-4 w-4 text-pink-500" />} className="from-pink-500/10 to-rose-500/10 border-pink-500/20" isTextValue={true} />
+        <StatCard title={interpolate(t.dashboard.playtime, { year: currentYear })} value={formatDuration(totalPlaytime, t.common.noDuration)} icon={<Clock className="h-4 w-4 text-blue-500" />} className="from-blue-500/10 to-purple-500/10 border-blue-500/20" />
+        <StatCard title={interpolate(t.dashboard.itemCount, { year: currentYear })} value={overviewGames.length.toLocaleString()} detail={interpolate(t.dashboard.itemDetail, { games: overviewGameCount, apps: overviewAppCount })} icon={<Gamepad2 className="h-4 w-4 text-green-500" />} className="from-green-500/10 to-emerald-500/10 border-green-500/20" />
+        <StatCard title={interpolate(t.dashboard.trophyCount, { year: currentYear })} value={earnedTrophies.toLocaleString()} icon={<Trophy className="h-4 w-4 text-amber-500" />} className="from-amber-500/10 to-orange-500/10 border-amber-500/20" />
+        <StatCard title={t.dashboard.latestActivity} value={recentGames[0]?.name || t.dashboard.noLatestActivity} detail={recentGames[0] ? formatDate(Math.max(recentGames[0].lastPlayedAt, recentGames[0].lastTrophyAt)) : ""} icon={<Calendar className="h-4 w-4 text-pink-500" />} className="from-pink-500/10 to-rose-500/10 border-pink-500/20" isTextValue={true} />
       </div>
 
       {collageGames.length > 0 && (
@@ -119,20 +126,20 @@ export default function DashboardPage() {
           userName={profile?.onlineId || psnId || undefined}
           psnId={psnId || undefined}
           userAvatar={profile?.avatarUrl || undefined}
-          periodLabel={`${currentYear} · 游戏回顾`}
+          periodLabel={interpolate(t.dashboard.yearReview, { year: currentYear })}
         />
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <QuickLink href="/library" icon={<List className="h-6 w-6 text-blue-500" />} title="游戏库" detail={`${games.length - libraryAppCount} 款游戏 · ${libraryAppCount} 个 App`} />
-        <QuickLink href="/charts" icon={<PieChart className="h-6 w-6 text-purple-500" />} title="统计图表" detail="游玩与奖杯趋势" />
-        <QuickLink href="/shame" icon={<Skull className="h-6 w-6 text-red-500" />} title="待完成清单" detail={`${incompleteGames.length} 款未满成就`} />
+        <QuickLink href="/library" icon={<List className="h-6 w-6 text-blue-500" />} title={t.dashboard.quickLibrary} detail={interpolate(t.dashboard.quickLibraryDetail, { games: games.length - libraryAppCount, apps: libraryAppCount })} />
+        <QuickLink href="/charts" icon={<PieChart className="h-6 w-6 text-purple-500" />} title={t.dashboard.quickCharts} detail={t.dashboard.quickChartsDetail} />
+        <QuickLink href="/shame" icon={<Skull className="h-6 w-6 text-red-500" />} title={t.dashboard.quickBacklog} detail={interpolate(t.dashboard.quickBacklogDetail, { count: incompleteGames.length })} />
       </div>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>最近活动</CardTitle>
-          <Link href="/timeline"><Button variant="ghost" size="sm" className="gap-2">查看时间线 <ArrowRight className="h-4 w-4" /></Button></Link>
+          <CardTitle>{t.dashboard.recentSection}</CardTitle>
+          <Link href="/timeline"><Button variant="ghost" size="sm" className="gap-2">{t.dashboard.viewTimeline} <ArrowRight className="h-4 w-4" /></Button></Link>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
@@ -144,14 +151,14 @@ export default function DashboardPage() {
                 <p className="text-sm font-medium truncate">{game.name}</p>
                 <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground mt-0.5">
                   <PlatformBadge platform={game.platform} />
-                  {hasTrophyData(game) && <><span>·</span><span>{game.trophyProgress}% 奖杯</span></>}
+                  {hasTrophyData(game) && <><span>·</span><span>{game.trophyProgress}% {t.common.trophy}</span></>}
                   <span>·</span>
-                  <span>{formatDuration(game.playtimeSeconds)}</span>
+                  <span>{formatDuration(game.playtimeSeconds, t.common.noDuration)}</span>
                 </div>
               </div>
             ))}
           </div>
-          {recentGames.length === 0 && <p className="text-sm text-muted-foreground text-center py-8">PSN 没有返回最近活动记录。</p>}
+          {recentGames.length === 0 && <p className="text-sm text-muted-foreground text-center py-8">{t.dashboard.noRecentActivity}</p>}
         </CardContent>
       </Card>
     </div>

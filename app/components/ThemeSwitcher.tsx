@@ -1,19 +1,19 @@
 "use client";
 
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { Sun, Moon, Monitor } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 
 export default function ThemeSwitcher() {
   const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  const { t, language } = useI18n();
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+  const { t } = useI18n();
 
   if (!mounted) {
     return (
@@ -46,9 +46,9 @@ export default function ThemeSwitcher() {
   };
 
   const getTitle = () => {
-    if (theme === "light") return "当前：浅色模式（点击切换至暗色）";
-    if (theme === "dark") return "当前：暗色模式（点击切换至跟随系统）";
-    return "当前：跟随系统（点击切换至浅色）";
+    if (theme === "light") return t.common.themeLight;
+    if (theme === "dark") return t.common.themeDark;
+    return t.common.themeSystem;
   };
 
   return (
@@ -58,7 +58,7 @@ export default function ThemeSwitcher() {
       onClick={cycleTheme}
       className="gap-1.5 text-muted-foreground hover:text-foreground px-2 transition-all"
       title={getTitle()}
-      aria-label="Toggle theme"
+      aria-label={getTitle()}
     >
       {getIcon()}
       <span className="text-xs font-medium capitalize hidden sm:inline">

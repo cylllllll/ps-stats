@@ -1,15 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown, Clock, Database, ExternalLink, Gamepad2, Loader2, RefreshCw, Search, Trophy, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { ArrowDown, ArrowUp, ArrowUpDown, Clock, Database, Gamepad2, Loader2, RefreshCw, Search, Trophy, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useGamesStore } from "@/lib/stores/useGamesStore";
 import type { PlayStationGame } from "@/app/types/playstation";
 import { formatDate, formatDuration, hasTrophyData, isAppPlatform } from "@/lib/playstation";
-import { useI18n } from "@/lib/i18n";
+import { interpolate, useI18n } from "@/lib/i18n";
 import PlatformBadge from "@/app/components/PlatformBadge";
 
 type SortField = "name" | "playtime" | "playCount" | "progress" | "lastPlayed";
@@ -73,15 +72,15 @@ export default function LibraryPage() {
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">{t.library.subtitle}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {fromCache && cacheAge !== null && <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground"><Database className="h-3 w-3" />{Math.round(cacheAge / 60000)} 分钟前缓存</span>}
+          {fromCache && cacheAge !== null && <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground"><Database className="h-3 w-3" />{interpolate(t.library.cached, { minutes: Math.round(cacheAge / 60000) })}</span>}
           <Button variant="outline" size="sm" onClick={() => fetchGames(true)} disabled={refreshing} className="h-8 px-2.5 sm:h-9 sm:px-3"><RefreshCw className={refreshing ? "h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" : "h-3.5 w-3.5 sm:h-4 sm:w-4"} /></Button>
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-2 sm:gap-4">
-        <SummaryCard icon={<Gamepad2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />} label="项目总数" value={games.length.toLocaleString()} detail={`${games.length - appCount} 款游戏 · ${appCount} 个 App`} />
-        <SummaryCard icon={<Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4" />} label="游玩时长" value={formatDuration(totalPlaytime)} />
-        <SummaryCard icon={<Trophy className="h-3.5 w-3.5 sm:h-4 sm:w-4" />} label="平均奖杯进度" value={`${averageProgress.toFixed(1)}%`} detail={`${trophyGames.length} 款有奖杯`} />
+        <SummaryCard icon={<Gamepad2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />} label={t.common.itemCount} value={games.length.toLocaleString()} detail={interpolate(t.library.gameSummary, { games: games.length - appCount, apps: appCount })} />
+        <SummaryCard icon={<Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4" />} label={t.common.playtime} value={formatDuration(totalPlaytime, t.common.noDuration)} />
+        <SummaryCard icon={<Trophy className="h-3.5 w-3.5 sm:h-4 sm:w-4" />} label={t.library.averageProgress} value={`${averageProgress.toFixed(1)}%`} detail={interpolate(t.library.trophySummary, { count: trophyGames.length })} />
       </div>
 
       <Card>
@@ -100,7 +99,7 @@ export default function LibraryPage() {
               <SortButton field="name" activeField={sortField} direction={sortDirection} onClick={changeSort} label={t.library.sortName} />
             </div>
           </div>
-          <p className="text-[11px] sm:text-xs text-muted-foreground mt-2 sm:mt-3">{query ? `找到 ${filteredGames.length} 个项目` : `${filteredGames.length} 个游戏或 App`}</p>
+          <p className="text-[11px] sm:text-xs text-muted-foreground mt-2 sm:mt-3">{query ? interpolate(t.library.foundItems, { count: filteredGames.length }) : interpolate(t.library.itemSummary, { count: filteredGames.length })}</p>
         </CardContent>
       </Card>
 
@@ -110,11 +109,11 @@ export default function LibraryPage() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-8 sm:w-12 px-2 sm:px-4 text-xs">#</TableHead>
-                <TableHead className="px-2 sm:px-4 text-xs sm:text-sm">游戏 / App</TableHead>
-                <TableHead className="px-2 sm:px-4 text-xs sm:text-sm">奖杯进度</TableHead>
-                <TableHead className="hidden sm:table-cell px-4 text-sm">游玩时长</TableHead>
-                <TableHead className="hidden md:table-cell px-4 text-sm">启动次数</TableHead>
-                <TableHead className="hidden lg:table-cell px-4 text-sm">最近活动</TableHead>
+                <TableHead className="px-2 sm:px-4 text-xs sm:text-sm">{t.library.tableGameApp}</TableHead>
+                <TableHead className="px-2 sm:px-4 text-xs sm:text-sm">{t.library.tableProgress}</TableHead>
+                <TableHead className="hidden sm:table-cell px-4 text-sm">{t.library.tablePlaytime}</TableHead>
+                <TableHead className="hidden md:table-cell px-4 text-sm">{t.library.tablePlayCount}</TableHead>
+                <TableHead className="hidden lg:table-cell px-4 text-sm">{t.library.tableLastActivity}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -139,23 +138,23 @@ export default function LibraryPage() {
                         <p className="font-medium truncate text-xs sm:text-sm max-w-[125px] xs:max-w-[180px] sm:max-w-[260px]">{game.name}</p>
                         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] sm:text-[11px] text-muted-foreground mt-0.5">
                           <PlatformBadge platform={game.platform} />
-                          <span className="sm:hidden font-semibold text-foreground">{formatDuration(game.playtimeSeconds)}</span>
-                          {game.playCount > 0 && <span className="sm:hidden">({game.playCount}次)</span>}
+                          <span className="sm:hidden font-semibold text-foreground">{formatDuration(game.playtimeSeconds, t.common.noDuration)}</span>
+                          {game.playCount > 0 && <span className="sm:hidden">{interpolate(t.library.mobileLaunchCount, { count: game.playCount })}</span>}
                           <TrophyCounts game={game} />
                         </div>
                       </div>
                     </div>
                   </TableCell>
                   <TableCell className="px-2 sm:px-4 py-2 sm:py-3"><ProgressCell game={game} /></TableCell>
-                  <TableCell className="hidden sm:table-cell px-4 text-sm text-muted-foreground">{formatDuration(game.playtimeSeconds)}</TableCell>
-                  <TableCell className="hidden md:table-cell px-4 text-sm text-muted-foreground">{game.playCount > 0 ? `${game.playCount} 次` : "—"}</TableCell>
+                  <TableCell className="hidden sm:table-cell px-4 text-sm text-muted-foreground">{formatDuration(game.playtimeSeconds, t.common.noDuration)}</TableCell>
+                  <TableCell className="hidden md:table-cell px-4 text-sm text-muted-foreground">{game.playCount > 0 ? interpolate(t.common.launchCount, { count: game.playCount }) : "—"}</TableCell>
                   <TableCell className="hidden lg:table-cell px-4 text-sm text-muted-foreground">{formatDate(Math.max(game.lastPlayedAt, game.lastTrophyAt))}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </div>
-        {filteredGames.length === 0 && <div className="py-12 text-center text-muted-foreground text-xs sm:text-sm">{query ? `没有找到“${query}”` : "暂无游戏或 App 数据"}</div>}
+        {filteredGames.length === 0 && <div className="py-12 text-center text-muted-foreground text-xs sm:text-sm">{query ? interpolate(t.library.noQueryResults, { query }) : t.library.noGames}</div>}
       </Card>
     </div>
   );
@@ -171,8 +170,9 @@ function SortButton({ field, activeField, direction, onClick, label }: { field: 
 }
 
 function ProgressCell({ game }: { game: PlayStationGame }) {
+  const { t } = useI18n();
   if (!hasTrophyData(game)) {
-    return <span className="text-[10px] sm:text-xs text-muted-foreground">无奖杯</span>;
+    return <span className="text-[10px] sm:text-xs text-muted-foreground">{t.common.noTrophies}</span>;
   }
 
   const is100 = game.trophyProgress >= 100;
@@ -185,7 +185,8 @@ function ProgressCell({ game }: { game: PlayStationGame }) {
 }
 
 function TrophyCounts({ game }: { game: PlayStationGame }) {
+  const { t } = useI18n();
   if (!hasTrophyData(game)) return null;
 
-  return <div className="flex flex-wrap items-center gap-x-2 text-xs"><span className="text-slate-500">{game.earnedTrophies.platinum} 白金</span><span className="text-amber-600">{game.earnedTrophies.gold} 金</span><span className="text-slate-500">{game.earnedTrophies.silver} 银</span><span className="text-orange-600">{game.earnedTrophies.bronze} 铜</span></div>;
+  return <div className="flex flex-wrap items-center gap-x-2 text-xs"><span className="text-muted-foreground">{interpolate(t.trophies.trophyCounts, game.earnedTrophies)}</span></div>;
 }

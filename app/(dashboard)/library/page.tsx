@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useGamesStore } from "@/lib/stores/useGamesStore";
 import type { PlayStationGame } from "@/app/types/playstation";
-import { formatDate, formatDuration, gameCoverAspectClass, gameCoverFixedHeightClass, gameCoverImageHeightClass, gameCoverObjectFit, platformLabel } from "@/lib/playstation";
+import { formatDate, formatDuration, isPS4Platform, platformLabel } from "@/lib/playstation";
 import { useI18n } from "@/lib/i18n";
 import PlatformBadge from "@/app/components/PlatformBadge";
 
@@ -121,7 +121,22 @@ export default function LibraryPage() {
                   <TableCell className="px-2 sm:px-4 text-xs text-muted-foreground">{index + 1}</TableCell>
                   <TableCell className="px-2 sm:px-4 py-2 sm:py-3">
                     <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                      {game.iconUrl ? <img src={game.iconUrl} alt="" className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg object-cover bg-muted shrink-0" loading="lazy" /> : <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg bg-muted flex items-center justify-center shrink-0"><Gamepad2 className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" /></div>}
+                      {game.iconUrl ? (
+                        <img
+                          src={game.iconUrl}
+                          alt=""
+                          className={
+                            isPS4Platform(game.platform)
+                              ? "w-14 sm:w-16 h-auto max-h-9 sm:max-h-11 rounded-md object-contain bg-muted/60 shrink-0"
+                              : "w-9 h-9 sm:w-11 sm:h-11 rounded-lg object-cover bg-muted shrink-0"
+                          }
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                          <Gamepad2 className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                        </div>
+                      )}
                       <div className="min-w-0 flex-1">
                         <p className="font-medium truncate text-xs sm:text-sm max-w-[125px] xs:max-w-[180px] sm:max-w-[260px]">{game.name}</p>
                         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] sm:text-[11px] text-muted-foreground mt-0.5">

@@ -10,6 +10,7 @@ import { useGamesStore } from "@/lib/stores/useGamesStore";
 import type { PlayStationGame } from "@/app/types/playstation";
 import { formatDate, formatDuration, gameCoverAspectClass, gameCoverFixedHeightClass, gameCoverImageHeightClass, gameCoverObjectFit, platformLabel } from "@/lib/playstation";
 import { useI18n } from "@/lib/i18n";
+import PlatformBadge from "@/app/components/PlatformBadge";
 
 type SortField = "name" | "playtime" | "playCount" | "progress" | "lastPlayed";
 type SortDirection = "asc" | "desc";
@@ -123,8 +124,8 @@ export default function LibraryPage() {
                       {game.iconUrl ? <img src={game.iconUrl} alt="" className={`w-9 h-9 sm:w-12 ${gameCoverFixedHeightClass(game.platform, "h-10")} sm:${gameCoverFixedHeightClass(game.platform, "h-12")} rounded-lg ${gameCoverObjectFit(game.platform)} bg-muted shrink-0`} loading="lazy" /> : <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-lg bg-muted flex items-center justify-center shrink-0"><Gamepad2 className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" /></div>}
                       <div className="min-w-0 flex-1">
                         <p className="font-medium truncate text-xs sm:text-sm max-w-[125px] xs:max-w-[180px] sm:max-w-[260px]">{game.name}</p>
-                        <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[10px] sm:text-[11px] text-muted-foreground mt-0.5">
-                          <span className="bg-secondary px-1 py-0.2 rounded font-medium text-foreground/80">{platformLabel(game.platform)}</span>
+                        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] sm:text-[11px] text-muted-foreground mt-0.5">
+                          <PlatformBadge platform={game.platform} />
                           <span className="sm:hidden font-semibold text-foreground">{formatDuration(game.playtimeSeconds)}</span>
                           {game.playCount > 0 && <span className="sm:hidden">({game.playCount}次)</span>}
                           <TrophyCounts game={game} />

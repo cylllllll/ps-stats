@@ -232,7 +232,7 @@ function buildExportPoster(
   userName?: string,
   psnId?: string,
   userAvatar?: string,
-  periodLabel: string = "all titles"
+  periodLabel: string = "游戏回顾"
 ): HTMLElement {
   const container = document.createElement("div");
   container.className = "bg-[#0f172a] text-white p-8 rounded-[32px]";
@@ -351,7 +351,7 @@ export default function GameCollage({
   psnId,
   userAvatar,
   maxGames,
-  periodLabel = "all titles",
+  periodLabel = "游戏回顾",
 }: GameCollageProps) {
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -465,29 +465,29 @@ export default function GameCollage({
   return (
     <div className="space-y-3">
       {/* On-Page Dashboard Display Card */}
-      <div className="rounded-2xl overflow-hidden bg-[#101827] text-white p-5">
-        <div className="flex items-center justify-between gap-4 mb-5">
+      <div className="rounded-2xl border bg-card text-card-foreground p-4 sm:p-5 shadow-sm">
+        <div className="flex items-center justify-between gap-4 mb-4 sm:mb-5">
           <div className="flex items-center gap-3 min-w-0">
             {userAvatar ? (
               <img
                 src={getExportImageUrl(userAvatar)}
                 alt=""
-                className="h-10 w-10 rounded-full object-cover border border-white/20"
+                className="h-10 w-10 rounded-full object-cover border border-border"
                 onError={(event) => handleImageError(event, userAvatar)}
               />
             ) : (
-              <div className="h-10 w-10 rounded-full bg-blue-500/30 flex items-center justify-center font-semibold">
+              <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold">
                 {(userName || "P").charAt(0).toUpperCase()}
               </div>
             )}
             <div className="min-w-0">
-              <p className="font-semibold truncate">{userName || "PlayStation player"}</p>
-              <p className="text-xs text-white/60 truncate">{psnId || "PSN"}</p>
+              <p className="font-semibold truncate text-foreground">{userName || "PlayStation player"}</p>
+              <p className="text-xs text-muted-foreground truncate">{psnId || "PSN"}</p>
             </div>
           </div>
           <div className="text-right shrink-0">
-            <p className="text-2xl font-bold">{topGames.length}</p>
-            <p className="text-[10px] uppercase tracking-wider text-white/50">{periodLabel}</p>
+            <p className="text-2xl font-bold text-foreground">{topGames.length}</p>
+            <p className="text-xs font-medium text-muted-foreground">{periodLabel}</p>
           </div>
         </div>
 
@@ -496,7 +496,7 @@ export default function GameCollage({
           {topGames.map((game) => (
             <div
               key={game.id}
-              className="group relative flex flex-col items-center justify-center min-w-0 rounded-xl overflow-hidden bg-white/10"
+              className="group relative flex flex-col items-center justify-center min-w-0 rounded-xl overflow-hidden bg-muted"
             >
               <div className={`${gameCoverAspectClass(game.platform)} relative w-full overflow-hidden bg-muted`}>
                 <img

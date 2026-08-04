@@ -115,7 +115,7 @@ export default function DashboardPage() {
               userName={profile?.onlineId || psnId || undefined}
               psnId={psnId || undefined}
               userAvatar={profile?.avatarUrl || undefined}
-              periodLabel={`${currentYear} · all titles`}
+              periodLabel="游戏回顾"
             />
           </CardContent>
         </Card>

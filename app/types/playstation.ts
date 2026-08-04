@@ -9,6 +9,8 @@ export interface PlayStationProfile {
   accountId: string;
   onlineId: string;
   avatarUrl: string;
+  country?: string;
+  language?: string;
   aboutMe?: string;
   isPlus?: boolean;
 }

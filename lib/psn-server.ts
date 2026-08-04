@@ -73,6 +73,8 @@ export async function resolveProfile(
       accountId?: string;
       onlineId?: string;
       avatarUrl?: string;
+      country?: string;
+      language?: string;
     };
   }>;
 
@@ -95,6 +97,8 @@ export async function resolveProfile(
       accountId,
       onlineId: result.socialMetadata?.onlineId || psnId,
       avatarUrl: result.socialMetadata?.avatarUrl || "",
+      country: result.socialMetadata?.country,
+      language: result.socialMetadata?.language,
     },
   };
 }
@@ -119,6 +123,8 @@ export async function fetchPlayStationProfile(psnId: string): Promise<{
       accountId,
       onlineId: profileResponse.onlineId || searchProfile.onlineId,
       avatarUrl: pickAvatar(profileResponse.avatars) || searchProfile.avatarUrl,
+      country: searchProfile.country,
+      language: searchProfile.language,
       aboutMe: profileResponse.aboutMe,
       isPlus: profileResponse.isPlus,
     };

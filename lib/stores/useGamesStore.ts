@@ -9,6 +9,7 @@ import type {
   PlayStationProfile,
 } from "@/app/types/playstation";
 import { normalizePlayStationGames } from "@/lib/psn-normalize";
+import { isPS4Platform } from "@/lib/playstation";
 import {
   getCachedGames,
   getCacheInfo,
@@ -23,8 +24,8 @@ interface ProfileResponse {
   profile: PlayStationProfile;
 }
 
-async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, { cache: "no-store" });
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, { cache: "no-store", ...init });
   const data = (await response.json()) as T & { error?: string };
 
   if (!response.ok) {
@@ -32,6 +33,48 @@ async function fetchJson<T>(url: string): Promise<T> {
   }
 
   return data;
+}
+
+interface StoreCoverResponse {
+  covers: Record<string, { imageUrl: string }>;
+}
+
+async function enrichPS4StoreCovers(
+  games: PlayStationGame[],
+  trophyTitles: PSNTrophyTitle[],
+  profile: PlayStationProfile
+): Promise<PlayStationGame[]> {
+  const trophyTitleById = new Map(
+    trophyTitles.map((title) => [title.npCommunicationId, title])
+  );
+  const titles = games.flatMap((game) => {
+    const trophyTitle = game.trophyTitleId
+      ? trophyTitleById.get(game.trophyTitleId)
+      : undefined;
+    const isTrophyFallback =
+      !game.iconUrl || game.iconUrl === trophyTitle?.trophyTitleIconUrl;
+
+    return trophyTitle && isPS4Platform(game.platform) && isTrophyFallback
+      ? [{ id: trophyTitle.npCommunicationId, name: game.name }]
+      : [];
+  });
+  if (!titles.length) return games;
+
+  const { covers } = await fetchJson<StoreCoverResponse>("/api/psn/covers", {
+    body: JSON.stringify({
+      locale: { country: profile.country, language: profile.language },
+      titles,
+    }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+
+  return games.map((game) => {
+    const imageUrl = game.trophyTitleId
+      ? covers[game.trophyTitleId]?.imageUrl
+      : undefined;
+    return imageUrl ? { ...game, iconUrl: imageUrl } : game;
+  });
 }
 
 async function fetchAllPages<T>(
@@ -167,9 +210,31 @@ export const useGamesStore = create<GamesState>((set, get) => ({
       );
 
       if (get().psnId !== psnId) return;
-      await setCachedGames(psnId, data.games, data.profile);
       set({
         games: data.games,
+        profile: data.profile,
+        gamesFromCache: false,
+        gamesCacheAge: null,
+        gamesLoading: false,
+        gamesRefreshing: forceRefresh,
+        gamesError: null,
+      });
+
+      let games = data.games;
+      try {
+        games = await enrichPS4StoreCovers(
+          data.games,
+          trophyTitles,
+          data.profile
+        );
+      } catch (error) {
+        console.warn("[Store] Unable to enrich PS4 square covers:", error);
+      }
+
+      if (get().psnId !== psnId) return;
+      await setCachedGames(psnId, games, data.profile);
+      set({
+        games,
         profile: data.profile,
         gamesFromCache: false,
         gamesCacheAge: null,

@@ -127,7 +127,7 @@ export default function LibraryPage() {
                           alt=""
                           className={
                             isPS4Platform(game.platform)
-                              ? "w-14 sm:w-16 h-auto max-h-9 sm:max-h-11 rounded-md object-contain bg-muted/60 shrink-0"
+                              ? "w-9 sm:w-11 h-auto rounded-md object-contain bg-muted/60 shrink-0"
                               : "w-9 h-9 sm:w-11 sm:h-11 rounded-lg object-cover bg-muted shrink-0"
                           }
                           loading="lazy"

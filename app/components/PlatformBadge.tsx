@@ -32,6 +32,20 @@ export function PS5Icon({ className = "h-3 w-auto" }: { className?: string }) {
   );
 }
 
+export function PS3Icon({ className = "h-3 w-auto" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 2048 1024"
+      className={className}
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-label="PS3"
+    >
+      <path d="M1980 291.84h-545.28v46.08h496.64c20.48 0 43.52 17.92 48.64 40.96 15.36 64 2.56 128-30.72 174.08-25.6 35.84-66.56 56.32-110.08 56.32h-358.4v46.08h358.4c71.68 0 135.68-35.84 176.64-92.16 48.64-69.12 66.56-163.84 43.52-243.2-12.8-43.52-48.64-73.22-79.36-73.22zM5.12 337.92s-7.68-46.08 5.12-46.08H537.6c145.92 12.8 140.8 222.72 7.68 232.96-115.2 10.24-243.2-5.12-358.4 0-15.36 0-35.84 0-48.64 10.24C76.8 568.32 110.08 665.6 102.4 721.92c0 2.56 0 5.12-5.12 7.68s-76.8 2.56-81.92 0-5.12-5.12-7.68-10.24c-2.56-99.84-17.92-230.4 115.2-240.64 120.32-10.24 253.44 10.24 371.2 0 120.32-10.24 81.92-74.24 46.08-115.2s-33.28-25.6-46.08-25.6H5.12zM1021.44 291.84h289.28v43.52h-2.56c0 2.56-238.08 2.56-238.08 2.56-25.6 0-56.32 35.84-61.44 61.44-10.24 76.8 20.48 217.6-20.48 279.04s-56.32 53.76-89.6 53.76h-281.6v-43.52h2.56c0-2.56 222.72-2.56 222.72-2.56 5.12 0 20.48-2.56 25.6-5.12 30.72-10.24 46.08-38.4 48.64-69.12 5.12-69.12-5.12-143.36 0-212.48 5.12-56.32 51.2-97.28 104.96-104.96z" />
+    </svg>
+  );
+}
+
 export interface PlatformBadgeProps {
   platform: string;
   variant?: "badge" | "inline";
@@ -48,6 +62,7 @@ export default function PlatformBadge({
   const norm = String(platform || "").toLocaleLowerCase();
   const isPs5 = norm.includes("ps5");
   const isPs4 = !isPs5 && norm.includes("ps4");
+  const isPs3 = !isPs5 && !isPs4 && norm.includes("ps3");
 
   if (variant === "inline") {
     if (isPs5) {
@@ -55,6 +70,9 @@ export default function PlatformBadge({
     }
     if (isPs4) {
       return <PS4Icon className={className || "h-3.5 w-auto inline-block align-middle"} />;
+    }
+    if (isPs3) {
+      return <PS3Icon className={className || "h-3.5 w-auto inline-block align-middle"} />;
     }
     return <span className={className}>{platformLabel(platform)}</span>;
   }
@@ -65,6 +83,8 @@ export default function PlatformBadge({
         <PS5Icon className="h-3 w-auto fill-current" />
       ) : isPs4 ? (
         <PS4Icon className="h-3 w-auto fill-current" />
+      ) : isPs3 ? (
+        <PS3Icon className="h-3 w-auto fill-current" />
       ) : (
         <span>{platformLabel(platform)}</span>
       )}

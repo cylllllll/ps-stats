@@ -14,7 +14,7 @@ export function isPlayedInYear(
   game: PlayStationGame,
   year = new Date().getFullYear()
 ): boolean {
-  const playedAt = game.lastPlayedAt || game.firstPlayedAt;
+  const playedAt = game.lastPlayedAt || game.firstPlayedAt || game.lastTrophyAt;
   if (!playedAt) return false;
   return new Date(playedAt * 1000).getFullYear() === year;
 }

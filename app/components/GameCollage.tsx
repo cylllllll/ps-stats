@@ -6,6 +6,7 @@ import { toBlob } from "html-to-image";
 import type { PlayStationGame } from "@/app/types/playstation";
 import { Button } from "@/components/ui/button";
 import { formatDuration, gameCoverAspectClass, gameCoverImageHeightClass, gameCoverObjectFit, isPlayed, platformLabel } from "@/lib/playstation";
+import PlatformBadge from "@/app/components/PlatformBadge";
 
 interface GameCollageProps {
   games: PlayStationGame[];
@@ -506,7 +507,13 @@ export default function GameCollage({
                 />
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-2 pt-6">
                   <p className="text-xs font-semibold text-white truncate">{game.name}</p>
-                  <p className="text-[10px] text-white/70">{game.trophyProgress}% · {formatDuration(game.playtimeSeconds)} · {platformLabel(game.platform)}</p>
+                  <div className="flex items-center gap-1 text-[10px] text-white/80 mt-0.5">
+                    <PlatformBadge platform={game.platform} className="px-1 py-0 text-[9px] bg-white/20 text-white border-0" />
+                    <span>·</span>
+                    <span>{game.trophyProgress}%</span>
+                    <span>·</span>
+                    <span>{formatDuration(game.playtimeSeconds)}</span>
+                  </div>
                 </div>
               </div>
             </div>

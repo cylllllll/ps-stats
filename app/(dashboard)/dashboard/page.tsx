@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { useGamesStore } from "@/lib/stores/useGamesStore";
 import { formatDate, formatDuration, gameCoverAspectClass, gameCoverImageHeightClass, gameCoverObjectFit, incompleteTrophyGames, isPlayed, isPlayedInYear, platformLabel } from "@/lib/playstation";
 import GameCollage from "@/app/components/GameCollage";
+import PlatformBadge from "@/app/components/PlatformBadge";
 
 export default function DashboardPage() {
   const games = useGamesStore((state) => state.games);
@@ -139,7 +140,13 @@ export default function DashboardPage() {
                   <img src={game.iconUrl} alt={game.name} className={`w-full ${gameCoverImageHeightClass(game.platform)} ${gameCoverObjectFit(game.platform)} group-hover:scale-105 transition-transform`} loading="lazy" />
                 </div>
                 <p className="text-sm font-medium truncate">{game.name}</p>
-                <p className="text-xs text-muted-foreground">{platformLabel(game.platform)} · {game.trophyProgress}% 奖杯 · {formatDuration(game.playtimeSeconds)}</p>
+                <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                  <PlatformBadge platform={game.platform} />
+                  <span>·</span>
+                  <span>{game.trophyProgress}% 奖杯</span>
+                  <span>·</span>
+                  <span>{formatDuration(game.playtimeSeconds)}</span>
+                </div>
               </div>
             ))}
           </div>

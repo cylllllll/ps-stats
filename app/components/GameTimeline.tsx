@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { PlayStationGame } from "@/app/types/playstation";
 import { activityTimestamp, formatDate, formatDuration, gameCoverAspectClass, gameCoverFixedHeightClass, gameCoverObjectFit, platformLabel } from "@/lib/playstation";
+import PlatformBadge from "@/app/components/PlatformBadge";
 
 interface GameTimelineProps {
   games: PlayStationGame[];
@@ -97,9 +98,9 @@ function ActivityCard({ title, description, icon, games, empty }: { title: strin
 }
 
 function GameList({ games }: { games: PlayStationGame[] }) {
-  return <div className="space-y-3">{games.map((game, index) => <div key={`${game.id}-${index}`} className="flex items-center gap-3"><img src={game.iconUrl} alt="" className={`w-10 ${gameCoverFixedHeightClass(game.platform, "h-10")} rounded ${gameCoverObjectFit(game.platform)} bg-muted`} /><div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{game.name}</p><p className="text-xs text-muted-foreground">{platformLabel(game.platform)} · {game.trophyProgress}% 奖杯 · {formatDuration(game.playtimeSeconds)}</p></div><Badge variant="outline" className="text-xs shrink-0">{formatDate(activityTimestamp(game))}</Badge></div>)}</div>;
+  return <div className="space-y-3">{games.map((game, index) => <div key={`${game.id}-${index}`} className="flex items-center gap-3"><img src={game.iconUrl} alt="" className={`w-10 ${gameCoverFixedHeightClass(game.platform, "h-10")} rounded ${gameCoverObjectFit(game.platform)} bg-muted`} /><div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{game.name}</p><div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground mt-0.5"><PlatformBadge platform={game.platform} /><span>·</span><span>{game.trophyProgress}% 奖杯</span><span>·</span><span>{formatDuration(game.playtimeSeconds)}</span></div></div><Badge variant="outline" className="text-xs shrink-0">{formatDate(activityTimestamp(game))}</Badge></div>)}</div>;
 }
 
 function GameTile({ game }: { game: PlayStationGame }) {
-  return <div className="group relative flex items-center justify-center"><img src={game.iconUrl} alt={game.name} className={`w-full ${gameCoverAspectClass(game.platform)} ${gameCoverObjectFit(game.platform)} rounded-lg transition-transform group-hover:scale-105 bg-muted`} /><div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2"><div><p className="text-white text-xs font-medium line-clamp-1">{game.name}</p><p className="text-white/70 text-[10px]">{platformLabel(game.platform)} · {formatDate(activityTimestamp(game))} · {game.trophyProgress}%</p></div></div></div>;
+  return <div className="group relative flex items-center justify-center"><img src={game.iconUrl} alt={game.name} className={`w-full ${gameCoverAspectClass(game.platform)} ${gameCoverObjectFit(game.platform)} rounded-lg transition-transform group-hover:scale-105 bg-muted`} /><div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2"><div><p className="text-white text-xs font-medium line-clamp-1">{game.name}</p><div className="flex flex-wrap items-center gap-1 text-white/80 text-[10px] mt-0.5"><PlatformBadge platform={game.platform} className="px-1 py-0 text-[9px] bg-white/20 text-white border-0" /><span>·</span><span>{formatDate(activityTimestamp(game))}</span><span>·</span><span>{game.trophyProgress}%</span></div></div></div></div>;
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type SyntheticEvent } from "react";
 import { Download, Loader2 } from "lucide-react";
-import { toBlob } from "html-to-image";
+import { toPng } from "html-to-image";
 import type { PlayStationGame } from "@/app/types/playstation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -411,6 +411,19 @@ function buildExportPoster(
   return container;
 }
 
+function dataUrlToBlob(dataUrl: string): Blob {
+  const parts = dataUrl.split(",");
+  const mimeMatch = parts[0].match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : "image/png";
+  const binary = atob(parts[1]);
+  let length = binary.length;
+  const buffer = new Uint8Array(length);
+  while (length--) {
+    buffer[length] = binary.charCodeAt(length);
+  }
+  return new Blob([buffer], { type: mime });
+}
+
 export default function GameCollage({
   games,
   userName,
@@ -439,7 +452,7 @@ export default function GameCollage({
       // 1. Preload ALL images as Data URLs in memory FIRST with 4-tier fallback
       const { avatarDataUrl, coverDataUrls } = await preloadAllImageDataUrls(topGames, userAvatar);
 
-      // 2. Build independent 1200px offscreen poster container using fully loaded Data URLs
+      // 2. Build independent 1200px poster container using fully loaded Data URLs
       const exportPoster = buildExportPoster(
         topGames,
         avatarDataUrl,
@@ -450,11 +463,13 @@ export default function GameCollage({
         periodLabel
       );
 
+      // Mount inside viewport with opacity 0.01 so WebKit/Safari fully decodes and renders images
       exportHost = document.createElement("div");
       exportHost.style.position = "fixed";
-      exportHost.style.left = "-9999px";
-      exportHost.style.top = "-9999px";
+      exportHost.style.left = "0px";
+      exportHost.style.top = "0px";
       exportHost.style.width = "1200px";
+      exportHost.style.opacity = "0.01";
       exportHost.style.zIndex = "-9999";
       exportHost.style.pointerEvents = "none";
       exportHost.appendChild(exportPoster);
@@ -462,52 +477,53 @@ export default function GameCollage({
 
       // Ensure all images appended to DOM have completed loading before rendering canvas
       await waitForAllImagesInElement(exportPoster);
-      await wait(250);
+      await wait(300);
 
-      // 3. Render HD PNG Blob (with pixelRatio 2, falling back to 1.5/1.0 if canvas limits hit)
-      let blob: Blob | null = null;
+      // 3. Render HD PNG Data URL (with pixelRatio 2, falling back to 1.5/1.0 if canvas limits hit)
+      let dataUrl = "";
 
       try {
-        blob = await toBlob(exportPoster, {
+        dataUrl = await toPng(exportPoster, {
           cacheBust: false,
           pixelRatio: 2,
           backgroundColor: "#0f172a",
-          fontEmbedCSS: "",
+          skipFonts: true,
           imagePlaceholder: EXPORT_PLACEHOLDER,
           onImageErrorHandler: () => undefined,
         });
       } catch (err) {
-        console.warn("toBlob pixelRatio 2 failed, trying pixelRatio 1.5:", err);
+        console.warn("toPng pixelRatio 2 failed, trying pixelRatio 1.5:", err);
       }
 
-      if (!blob || blob.size === 0) {
+      if (!dataUrl || dataUrl.length < 500) {
         await wait(150);
-        blob = await toBlob(exportPoster, {
+        dataUrl = await toPng(exportPoster, {
           cacheBust: true,
           pixelRatio: 1.5,
           backgroundColor: "#0f172a",
-          fontEmbedCSS: "",
+          skipFonts: true,
           imagePlaceholder: EXPORT_PLACEHOLDER,
           onImageErrorHandler: () => undefined,
         });
       }
 
-      if (!blob || blob.size === 0) {
-        blob = await toBlob(exportPoster, {
+      if (!dataUrl || dataUrl.length < 500) {
+        dataUrl = await toPng(exportPoster, {
           cacheBust: true,
           pixelRatio: 1,
           backgroundColor: "#0f172a",
-          fontEmbedCSS: "",
+          skipFonts: true,
           imagePlaceholder: EXPORT_PLACEHOLDER,
           onImageErrorHandler: () => undefined,
         });
       }
 
-      if (!blob || blob.size === 0) {
+      if (!dataUrl || dataUrl.length < 500) {
         throw new Error("拼图生成结果为空，请检查网络或刷新页面后重试。");
       }
 
       // 4. Trigger direct download
+      const blob = dataUrlToBlob(dataUrl);
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.download = `playstation-collage-${psnId || "stats"}.png`;

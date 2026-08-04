@@ -99,6 +99,13 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard title={`${currentYear} 游玩时长`} value={formatDuration(totalPlaytime)} icon={<Clock className="h-4 w-4 text-blue-500" />} className="from-blue-500/10 to-purple-500/10 border-blue-500/20" />
+        <StatCard title="今年游戏数" value={overviewGames.length.toLocaleString()} detail={`${playedGames.length} 款有活动记录`} icon={<Gamepad2 className="h-4 w-4 text-green-500" />} className="from-green-500/10 to-emerald-500/10 border-green-500/20" />
+        <StatCard title="今年奖杯数" value={earnedTrophies.toLocaleString()} icon={<Trophy className="h-4 w-4 text-amber-500" />} className="from-amber-500/10 to-orange-500/10 border-amber-500/20" />
+        <StatCard title="今年最近活动" value={recentGames[0]?.name || "暂无记录"} detail={recentGames[0] ? formatDate(Math.max(recentGames[0].lastPlayedAt, recentGames[0].lastTrophyAt)) : ""} icon={<Calendar className="h-4 w-4 text-pink-500" />} className="from-pink-500/10 to-rose-500/10 border-pink-500/20" isTextValue={true} />
+      </div>
+
       {overviewGames.length > 0 && (
         <Card className="overflow-hidden">
           <CardContent className="p-4">
@@ -112,13 +119,6 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       )}
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title={`${currentYear} 游玩时长`} value={formatDuration(totalPlaytime)} icon={<Clock className="h-4 w-4 text-blue-500" />} className="from-blue-500/10 to-purple-500/10 border-blue-500/20" />
-        <StatCard title="今年游戏数" value={overviewGames.length.toLocaleString()} detail={`${playedGames.length} 款有活动记录`} icon={<Gamepad2 className="h-4 w-4 text-green-500" />} className="from-green-500/10 to-emerald-500/10 border-green-500/20" />
-        <StatCard title="今年奖杯数" value={earnedTrophies.toLocaleString()} icon={<Trophy className="h-4 w-4 text-amber-500" />} className="from-amber-500/10 to-orange-500/10 border-amber-500/20" />
-        <StatCard title="今年最近活动" value={recentGames[0]?.name || "暂无记录"} detail={recentGames[0] ? formatDate(Math.max(recentGames[0].lastPlayedAt, recentGames[0].lastTrophyAt)) : ""} icon={<Calendar className="h-4 w-4 text-pink-500" />} className="from-pink-500/10 to-rose-500/10 border-pink-500/20" />
-      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <QuickLink href="/library" icon={<Gamepad2 className="h-6 w-6 text-blue-500" />} title="游戏库" detail={`${games.length} 款游戏`} />
@@ -150,16 +150,36 @@ export default function DashboardPage() {
   );
 }
 
-function StatCard({ title, value, detail, icon, className }: { title: string; value: string; detail?: string; icon: React.ReactNode; className: string }) {
+function StatCard({
+  title,
+  value,
+  detail,
+  icon,
+  className,
+  isTextValue = false,
+}: {
+  title: string;
+  value: string;
+  detail?: string;
+  icon: React.ReactNode;
+  className: string;
+  isTextValue?: boolean;
+}) {
   return (
-    <Card className={`bg-gradient-to-br ${className}`}>
+    <Card className={`bg-gradient-to-br ${className} flex flex-col justify-between`}>
       <CardHeader className="flex flex-row items-center justify-between pb-2 p-4">
         <CardTitle className="text-xs font-medium text-muted-foreground">{title}</CardTitle>
         {icon}
       </CardHeader>
-      <CardContent className="p-4 pt-0">
-        <div className="text-2xl font-bold truncate">{value}</div>
-        {detail && <p className="text-xs text-muted-foreground truncate">{detail}</p>}
+      <CardContent className="p-4 pt-0 flex-1 flex flex-col justify-end">
+        {isTextValue ? (
+          <div className="text-sm sm:text-base font-bold line-clamp-2 leading-tight min-h-[2.5rem] flex items-center">
+            {value}
+          </div>
+        ) : (
+          <div className="text-2xl font-bold truncate">{value}</div>
+        )}
+        {detail && <p className="text-xs text-muted-foreground truncate mt-1">{detail}</p>}
       </CardContent>
     </Card>
   );

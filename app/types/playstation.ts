@@ -13,6 +13,48 @@ export interface PlayStationProfile {
   isPlus?: boolean;
 }
 
+export interface PSNTrophyTitle {
+  npCommunicationId: string;
+  trophyTitleName: string;
+  trophyTitleIconUrl?: string;
+  trophyTitlePlatform?: string;
+  progress?: number;
+  definedTrophies?: Partial<TrophyCounts>;
+  earnedTrophies?: Partial<TrophyCounts>;
+  lastUpdatedDateTime?: string;
+  hiddenFlag?: boolean;
+}
+
+export interface PSNPlayedConcept {
+  id?: string | number;
+  titleIds?: string[];
+  name?: string;
+  localizedName?: {
+    metadata?: Record<string, unknown>;
+  };
+}
+
+export interface PSNPlayedTitle {
+  titleId: string;
+  concept?: PSNPlayedConcept;
+  name?: string;
+  localizedName?: string;
+  imageUrl?: string;
+  localizedImageUrl?: string;
+  category?: string;
+  service?: string;
+  playCount?: number | string;
+  playDuration?: string;
+  firstPlayedDateTime?: string;
+  lastPlayedDateTime?: string;
+}
+
+export interface PSNPage<T> {
+  items: T[];
+  nextOffset?: number;
+  totalItemCount?: number;
+}
+
 /**
  * The normalized game record used by every client-side analysis page.
  * All values come from PlayStation Network user/trophy APIs.

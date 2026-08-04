@@ -182,3 +182,61 @@ html {
 .animate-float {
   animation: float 6s ease-in-out infinite;
 }
+
+/* Recharts Dark Theme Fixes */
+.dark .recharts-default-tooltip {
+  background-color: var(--card) !important;
+  border-color: var(--border) !important;
+  color: var(--card-foreground) !important;
+  border-radius: var(--radius);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+}
+
+.dark .recharts-tooltip-item {
+  color: var(--card-foreground) !important;
+}
+
+.dark .recharts-cartesian-grid line {
+  stroke: #333333 !important;
+}
+
+.dark .recharts-text {
+  fill: #a3a3a3 !important;
+}
+
+/* Metallic silver shimmer animation for 100% progress */
+@keyframes silver-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.platinum-shimmer {
+  background: linear-gradient(
+    90deg,
+    #94a3b8 0%,
+    #cbd5e1 25%,
+    #ffffff 50%,
+    #cbd5e1 75%,
+    #94a3b8 100%
+  );
+  background-size: 200% 100%;
+  animation: silver-shimmer 3.5s infinite linear;
+}
+
+.dark .platinum-shimmer {
+  background: linear-gradient(
+    90deg,
+    #475569 0%,
+    #94a3b8 25%,
+    #f8fafc 50%,
+    #94a3b8 75%,
+    #475569 100%
+  );
+  background-size: 200% 100%;
+  animation: silver-shimmer 3.5s infinite linear;
+}
+

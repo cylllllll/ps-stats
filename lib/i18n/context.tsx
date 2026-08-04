@@ -14,44 +14,10 @@ const I18nContext = createContext<I18nContextType | null>(null);
 const STORAGE_KEY = "playstation-stats-language";
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguageState] = useState<Language>("zh");
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    // Load saved language preference
-    const saved = localStorage.getItem(STORAGE_KEY) as Language | null;
-    if (saved && (saved === "en" || saved === "zh")) {
-      window.setTimeout(() => setLanguageState(saved), 0);
-    } else {
-      // Detect browser language
-      const browserLang = navigator.language.toLowerCase();
-      if (browserLang.startsWith("zh")) {
-        window.setTimeout(() => setLanguageState("zh"), 0);
-      } else {
-        window.setTimeout(() => setLanguageState("en"), 0);
-      }
-    }
-    window.setTimeout(() => setMounted(true), 0);
-  }, []);
-
-  const setLanguage = useCallback((lang: Language) => {
-    setLanguageState(lang);
-    localStorage.setItem(STORAGE_KEY, lang);
-  }, []);
-
-  const t = translations[language];
-
-  // Prevent hydration mismatch by not rendering until mounted
-  if (!mounted) {
-    return (
-      <I18nContext.Provider value={{ language: "zh", setLanguage, t: translations.zh }}>
-        {children}
-      </I18nContext.Provider>
-    );
-  }
+  const t = translations.zh;
 
   return (
-    <I18nContext.Provider value={{ language, setLanguage, t }}>
+    <I18nContext.Provider value={{ language: "zh", setLanguage: () => {}, t }}>
       {children}
     </I18nContext.Provider>
   );

@@ -10,7 +10,7 @@ interface GamesCache {
 }
 
 const GAMES_CACHE_DURATION = 1000 * 60 * 30;
-const GAMES_CACHE_VERSION = 9;
+const GAMES_CACHE_VERSION = 10;
 
 const db = new Dexie("PlayStationStatsDB") as Dexie & {
   games: EntityTable<GamesCache, "psnId">;

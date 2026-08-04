@@ -5,7 +5,7 @@ import { Download, Loader2 } from "lucide-react";
 import { toBlob } from "html-to-image";
 import type { PlayStationGame } from "@/app/types/playstation";
 import { Button } from "@/components/ui/button";
-import { formatDuration, gameCoverAspectClass, gameCoverImageHeightClass, gameCoverObjectFit, isPlayed, isPS4Platform, platformLabel } from "@/lib/playstation";
+import { formatDuration, gameCoverAspectClass, gameCoverImageHeightClass, gameCoverObjectFit, isPlayed, platformLabel } from "@/lib/playstation";
 
 interface GameCollageProps {
   games: PlayStationGame[];
@@ -16,20 +16,8 @@ interface GameCollageProps {
   periodLabel?: string;
 }
 
-interface CollageGame {
-  game: PlayStationGame;
-  exportScale: number;
-}
-
-interface ExportPlacement {
-  column: number;
-  row: number;
-  columnSpan: number;
-  rowSpan: number;
-}
-
 const EXPORT_PLACEHOLDER = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><rect width="512" height="512" fill="#243248"/><path d="M128 352l78-86 56 58 42-48 80 76H128z" fill="#61708a"/><circle cx="205" cy="185" r="34" fill="#61708a"/></svg>'
+  '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><rect width="512" height="512" fill="#1e293b"/><path d="M128 352l78-86 56 58 42-48 80 76H128z" fill="#475569"/><circle cx="205" cy="185" r="34" fill="#475569"/></svg>'
 )}`;
 
 function getExportImageUrl(url: string): string {
@@ -49,194 +37,6 @@ function normalizeImageUrl(url: string): string {
   return url.trim().replace(/^http:\/\//i, "https://");
 }
 
-function getExportScale(
-  playtimeSeconds: number,
-  maxPlaytimeSeconds: number,
-  rank: number
-): number {
-  if (rank === 0) return 1;
-  if (rank === 1) return 0.5;
-  if (maxPlaytimeSeconds <= 0) return 0.25;
-  const ratio = Math.max(0, Math.min(1, playtimeSeconds / maxPlaytimeSeconds));
-  return Math.max(0.25, Math.min(0.5, Math.round(Math.sqrt(ratio) * 4) / 4));
-}
-
-// Integer grid points that travel clockwise from the top-left corner.
-// The first tile is placed explicitly at (0, 0); the remaining points are
-// searched in this order so the next tile starts on its right-hand side.
-function getSpiralPoints(count: number): Array<{ x: number; y: number }> {
-  const points: Array<{ x: number; y: number }> = [{ x: 0, y: 0 }];
-  const directions = [
-    { x: 1, y: 0 },
-    { x: 0, y: 1 },
-    { x: -1, y: 0 },
-    { x: 0, y: -1 },
-  ];
-  let x = 0;
-  let y = 0;
-  let directionIndex = 0;
-  let segmentLength = 1;
-
-  while (points.length < count) {
-    for (let segment = 0; segment < 2 && points.length < count; segment += 1) {
-      const direction = directions[directionIndex];
-      for (let step = 0; step < segmentLength && points.length < count; step += 1) {
-        x += direction.x;
-        y += direction.y;
-        points.push({ x, y });
-      }
-      directionIndex = (directionIndex + 1) % directions.length;
-    }
-    segmentLength += 1;
-  }
-
-  return points;
-}
-
-function placementsOverlap(first: ExportPlacement, second: ExportPlacement): boolean {
-  return (
-    first.column < second.column + second.columnSpan &&
-    second.column < first.column + first.columnSpan &&
-    first.row < second.row + second.rowSpan &&
-    second.row < first.row + first.rowSpan
-  );
-}
-
-function getTileSpans(
-  collageGame: CollageGame,
-  baseSpan: number,
-  minimumSpan: number
-): { columnSpan: number; rowSpan: number } {
-  const squareSpan = Math.max(
-    minimumSpan,
-    Math.round(collageGame.exportScale * baseSpan)
-  );
-
-  if (isPS4Platform(collageGame.game.platform)) {
-    // A PS4 cover is rendered as a 2:1 rectangle: at the same scale it uses
-    // half the area of a square cover instead of being shrunk in both axes.
-    return {
-      columnSpan: squareSpan,
-      rowSpan: Math.max(1, Math.round(squareSpan / 2)),
-    };
-  }
-
-  return { columnSpan: squareSpan, rowSpan: squareSpan };
-}
-
-function applyExportLayout(
-  exportRoot: HTMLElement,
-  collageGames: CollageGame[],
-  exportWidth: number
-): void {
-  const grid = exportRoot.querySelector<HTMLElement>("[data-collage-grid]");
-  if (!grid) return;
-
-  const columns = exportWidth >= 640 ? 32 : 16;
-  const baseSpan = columns / 2;
-  const minimumSpan = Math.max(2, Math.round(baseSpan / 4));
-  const gap = 8;
-  const cellSize = Math.max(12, (exportWidth - gap * (columns - 1)) / columns);
-  const spiralPoints = getSpiralPoints(Math.max(1024, collageGames.length * 256));
-  const placements: ExportPlacement[] = [];
-  const tiles = Array.from(grid.querySelectorAll<HTMLElement>("[data-collage-tile]"));
-  let pointIndex = 1;
-
-  collageGames.forEach((collageGame, index) => {
-    const { columnSpan, rowSpan } = getTileSpans(
-      collageGame,
-      baseSpan,
-      minimumSpan
-    );
-    let placement: ExportPlacement | null = null;
-
-    if (index === 0) {
-      placement = { column: 0, row: 0, columnSpan, rowSpan };
-    } else if (index === 1) {
-      // Keep the second-ranked game on the first game's right edge even when
-      // the first cover is a shorter PS4 rectangle.
-      const firstPlacement = placements[0];
-      const rightOfFirst: ExportPlacement = {
-        column: firstPlacement.column + firstPlacement.columnSpan,
-        row: firstPlacement.row,
-        columnSpan,
-        rowSpan,
-      };
-      if (
-        rightOfFirst.column + rightOfFirst.columnSpan <= columns &&
-        !placements.some((placed) => placementsOverlap(rightOfFirst, placed))
-      ) {
-        placement = rightOfFirst;
-        const pointAtSecond = spiralPoints.findIndex(
-          (point) => point.x === rightOfFirst.column && point.y === rightOfFirst.row
-        );
-        if (pointAtSecond >= 0) pointIndex = pointAtSecond + 1;
-      }
-    }
-
-    if (!placement) {
-      while (pointIndex < spiralPoints.length && !placement) {
-        const point = spiralPoints[pointIndex];
-        pointIndex += 1;
-        const candidate: ExportPlacement = {
-          column: point.x,
-          row: point.y,
-          columnSpan,
-          rowSpan,
-        };
-        if (
-          candidate.column >= 0 &&
-          candidate.row >= 0 &&
-          candidate.column + candidate.columnSpan <= columns &&
-          !placements.some((placed) => placementsOverlap(candidate, placed))
-        ) {
-          placement = candidate;
-        }
-      }
-    }
-
-    if (!placement) {
-      const lastRow = placements.reduce(
-        (max, placed) => Math.max(max, placed.row + placed.rowSpan),
-        0
-      );
-      placement = {
-        column: 0,
-        row: lastRow + 1,
-        columnSpan: Math.min(columnSpan, columns),
-        rowSpan,
-      };
-    }
-    placements.push(placement);
-  });
-
-  const rowCount = placements.reduce(
-    (max, placement) => Math.max(max, placement.row + placement.rowSpan),
-    0
-  );
-
-  grid.style.gridTemplateColumns = `repeat(${columns}, minmax(0, 1fr))`;
-  grid.style.gridAutoRows = `${cellSize}px`;
-  grid.style.gridAutoFlow = "row";
-  grid.style.gap = `${gap}px`;
-  grid.style.height = `${rowCount * cellSize + Math.max(0, rowCount - 1) * gap}px`;
-
-  tiles.forEach((tile, index) => {
-    const placement = placements[index];
-    if (!placement) return;
-
-    tile.style.gridColumn = `${placement.column + 1} / span ${placement.columnSpan}`;
-    tile.style.gridRow = `${placement.row + 1} / span ${placement.rowSpan}`;
-    tile.style.height = "100%";
-
-    const coverFrame = tile.querySelector<HTMLElement>("[data-collage-cover-frame]");
-    if (coverFrame) {
-      coverFrame.style.height = "100%";
-      coverFrame.style.aspectRatio = `${placement.columnSpan} / ${placement.rowSpan}`;
-    }
-  });
-}
-
 function handleImageError(
   event: SyntheticEvent<HTMLImageElement>,
   originalUrl: string
@@ -254,61 +54,6 @@ function handleImageError(
   image.dataset.exportSrc = getExportImageUrl(originalUrl);
   image.removeAttribute("crossorigin");
   image.src = image.dataset.originalSrc;
-}
-
-async function waitForImages(root: HTMLElement): Promise<void> {
-  const images = Array.from(root.querySelectorAll("img"));
-  await Promise.all(
-    images.map(
-      async (image) => {
-        for (let attempt = 0; attempt < 3; attempt += 1) {
-          if (image.complete && image.naturalWidth > 0) {
-            return;
-          }
-
-          let startedRetry = false;
-          if (
-            image.complete &&
-            image.naturalWidth === 0 &&
-            image.src &&
-            !image.src.startsWith("data:")
-          ) {
-            image.src = addRetryQuery(image.src, attempt + 1);
-            startedRetry = true;
-          }
-
-          await waitForImageEvent(image, startedRetry);
-
-          // An error can trigger the React fallback and start a second image
-          // request. Continue the loop so we wait for that request as well.
-          if (image.complete && image.naturalWidth > 0) return;
-          if (image.src.startsWith("data:")) return;
-        }
-      }
-    )
-  );
-}
-
-function waitForImageEvent(image: HTMLImageElement, forceWait = false): Promise<void> {
-  if (!forceWait && image.complete) return Promise.resolve();
-
-  return new Promise<void>((resolve) => {
-    const finish = () => {
-      window.clearTimeout(timeoutId);
-      image.removeEventListener("load", finish);
-      image.removeEventListener("error", finish);
-      resolve();
-    };
-
-    const timeoutId = window.setTimeout(finish, 10000);
-    image.addEventListener("load", finish, { once: true });
-    image.addEventListener("error", finish, { once: true });
-  });
-}
-
-function addRetryQuery(url: string, attempt: number): string {
-  const separator = url.includes("?") ? "&" : "?";
-  return `${url}${separator}exportRetry=${Date.now()}-${attempt}`;
 }
 
 function wait(milliseconds: number): Promise<void> {
@@ -352,7 +97,7 @@ async function getImageMimeType(blob: Blob): Promise<string | null> {
 
 async function imageBlobToDataUrl(blob: Blob): Promise<string> {
   const mimeType = await getImageMimeType(blob);
-  if (!mimeType) throw new Error("Image response did not contain a recognized image.");
+  if (!mimeType) return EXPORT_PLACEHOLDER;
 
   const typedBlob = blob.type.toLowerCase().startsWith("image/")
     ? blob
@@ -360,72 +105,243 @@ async function imageBlobToDataUrl(blob: Blob): Promise<string> {
   return blobToDataUrl(typedBlob);
 }
 
-function uniqueImageUrls(urls: Array<string | undefined>): string[] {
-  return Array.from(new Set(urls.filter((url): url is string => Boolean(url))));
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 4000): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(timeoutId);
+    return res;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw err;
+  }
 }
 
-function getImageSourceCandidates(image?: HTMLImageElement): string[] {
-  if (!image) return [];
+/**
+ * Robust Image-to-DataURL converter with timeout and fallbacks:
+ * Tier 1: Proxy URL fetch
+ * Tier 2: Direct URL fetch
+ * Tier 3: HTMLImageElement + 2D Canvas render
+ * Tier 4: EXPORT_PLACEHOLDER fallback (never throws or breaks export pipeline)
+ */
+async function urlToDataUrl(originalUrl: string): Promise<string> {
+  const normalized = normalizeImageUrl(originalUrl);
+  if (!normalized) return EXPORT_PLACEHOLDER;
+  if (normalized.startsWith("data:")) return normalized;
 
-  const originalUrl = image.dataset.originalSrc;
-  const currentUrl = image.currentSrc || image.src;
-  return uniqueImageUrls([
-    image.dataset.exportSrc,
-    originalUrl ? getExportImageUrl(originalUrl) : undefined,
-    currentUrl.startsWith("data:") ? currentUrl : undefined,
-    currentUrl.startsWith("/") ? currentUrl : undefined,
-    currentUrl.startsWith("http") ? currentUrl : undefined,
-  ]);
-}
-
-async function imageToDataUrl(image?: HTMLImageElement): Promise<string> {
-  let lastError: unknown;
-  for (const sourceUrl of getImageSourceCandidates(image)) {
-    if (sourceUrl.startsWith("data:")) return sourceUrl;
-
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      try {
-        const response = await fetch(
-          attempt === 0 ? sourceUrl : addRetryQuery(sourceUrl, attempt),
-          {
-            cache: "no-store",
-            credentials: "same-origin",
-          }
-        );
-        if (!response.ok) throw new Error(`Image request failed with ${response.status}.`);
-
-        const blob = await response.blob();
-        if (!blob.size) throw new Error("Image response was empty.");
+  // Tier 1: Proxy URL fetch with timeout
+  const proxyUrl = getExportImageUrl(normalized);
+  try {
+    const res = await fetchWithTimeout(proxyUrl, { cache: "force-cache" }, 4000);
+    if (res.ok) {
+      const blob = await res.blob();
+      if (blob.size > 0) {
         return await imageBlobToDataUrl(blob);
-      } catch (error) {
-        lastError = error;
-        if (attempt < 2) await wait(150 * (attempt + 1));
       }
     }
+  } catch {
+    // Continue
   }
 
-  console.warn("Unable to inline collage image:", lastError);
-  return EXPORT_PLACEHOLDER;
+  // Tier 2: Direct URL fetch with timeout
+  try {
+    const res = await fetchWithTimeout(normalized, { mode: "cors", cache: "force-cache" }, 4000);
+    if (res.ok) {
+      const blob = await res.blob();
+      if (blob.size > 0) {
+        return await imageBlobToDataUrl(blob);
+      }
+    }
+  } catch {
+    // Continue
+  }
+
+  // Tier 3: HTMLImageElement + 2D Canvas render
+  try {
+    return await imageElementToDataUrl(proxyUrl);
+  } catch {
+    try {
+      return await imageElementToDataUrl(normalized);
+    } catch {
+      return EXPORT_PLACEHOLDER;
+    }
+  }
 }
 
-async function inlineImages(
-  sourceRoot: HTMLElement,
-  exportRoot: HTMLElement
-): Promise<void> {
-  const sourceImages = Array.from(sourceRoot.querySelectorAll("img"));
-  const exportImages = Array.from(exportRoot.querySelectorAll("img"));
-
-  await Promise.all(exportImages.map(async (image, index) => {
-    image.removeAttribute("crossorigin");
-    image.removeAttribute("srcset");
-    image.removeAttribute("sizes");
-    image.removeAttribute("loading");
-    image.onerror = () => {
-      image.onerror = null;
-      image.src = EXPORT_PLACEHOLDER;
+function imageElementToDataUrl(src: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth || img.width || 512;
+        canvas.height = img.naturalHeight || img.height || 512;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return resolve(EXPORT_PLACEHOLDER);
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL("image/png"));
+      } catch {
+        resolve(EXPORT_PLACEHOLDER);
+      }
     };
-    image.src = await imageToDataUrl(sourceImages[index]);
-  }));
+    img.onerror = () => resolve(EXPORT_PLACEHOLDER);
+    img.src = src;
+  });
+}
+
+/**
+ * Preloads all cover images and avatar as Data URLs in memory before creating the export DOM.
+ * Batched in pools of 4 to prevent socket exhaustion.
+ */
+async function preloadAllImageDataUrls(
+  games: PlayStationGame[],
+  userAvatar?: string
+): Promise<{ avatarDataUrl: string; coverDataUrls: Record<string, string> }> {
+  const coverDataUrls: Record<string, string> = {};
+  let avatarDataUrl = EXPORT_PLACEHOLDER;
+
+  if (userAvatar) {
+    avatarDataUrl = await urlToDataUrl(userAvatar);
+  }
+
+  const BATCH_SIZE = 4;
+  for (let i = 0; i < games.length; i += BATCH_SIZE) {
+    const batch = games.slice(i, i + BATCH_SIZE);
+    await Promise.all(
+      batch.map(async (game) => {
+        if (!game.iconUrl) return;
+        coverDataUrls[game.id] = await urlToDataUrl(game.iconUrl);
+      })
+    );
+  }
+
+  return { avatarDataUrl, coverDataUrls };
+}
+
+/**
+ * Builds an independent offscreen 1200px export poster container.
+ * Sized at 1200px width (safe for all WebKit/Safari/Chrome canvas limits).
+ */
+function buildExportPoster(
+  topGames: PlayStationGame[],
+  avatarDataUrl: string,
+  coverDataUrls: Record<string, string>,
+  userName?: string,
+  psnId?: string,
+  userAvatar?: string,
+  periodLabel: string = "all titles"
+): HTMLElement {
+  const container = document.createElement("div");
+  container.className = "bg-[#0f172a] text-white p-8 rounded-[32px]";
+  container.style.width = "1200px";
+  container.style.fontFamily = "ui-sans-serif, system-ui, sans-serif";
+
+  // Header
+  const header = document.createElement("div");
+  header.className = "flex items-center justify-between gap-6 mb-8 pb-6 border-b border-white/10";
+
+  const userBox = document.createElement("div");
+  userBox.className = "flex items-center gap-4 min-w-0";
+
+  if (userAvatar && avatarDataUrl !== EXPORT_PLACEHOLDER) {
+    const avatarImg = document.createElement("img");
+    avatarImg.src = avatarDataUrl;
+    avatarImg.className = "h-14 w-14 rounded-full object-cover border-2 border-white/20 shadow-lg";
+    userBox.appendChild(avatarImg);
+  } else {
+    const fallbackAvatar = document.createElement("div");
+    fallbackAvatar.className = "h-14 w-14 rounded-full bg-blue-600 flex items-center justify-center text-xl font-bold text-white shadow-lg";
+    fallbackAvatar.textContent = (userName || "P").charAt(0).toUpperCase();
+    userBox.appendChild(fallbackAvatar);
+  }
+
+  const userDetails = document.createElement("div");
+  userDetails.className = "min-w-0";
+  const nameP = document.createElement("p");
+  nameP.className = "text-xl font-extrabold truncate tracking-tight";
+  nameP.textContent = userName || "PlayStation player";
+  const psnP = document.createElement("p");
+  psnP.className = "text-sm text-white/60 truncate mt-0.5";
+  psnP.textContent = psnId || "PSN";
+  userDetails.appendChild(nameP);
+  userDetails.appendChild(psnP);
+  userBox.appendChild(userDetails);
+
+  const statsBox = document.createElement("div");
+  statsBox.className = "text-right shrink-0";
+  const countP = document.createElement("p");
+  countP.className = "text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400";
+  countP.textContent = String(topGames.length);
+  const periodP = document.createElement("p");
+  periodP.className = "text-[11px] font-semibold uppercase tracking-widest text-white/40 mt-1";
+  periodP.textContent = periodLabel;
+  statsBox.appendChild(countP);
+  statsBox.appendChild(periodP);
+
+  header.appendChild(userBox);
+  header.appendChild(statsBox);
+  container.appendChild(header);
+
+  // Bento Grid (6 Columns, Square 1:1 Tile Units)
+  const maxPlaytimeSeconds = topGames[0]?.playtimeSeconds || 0;
+  const grid = document.createElement("div");
+  grid.style.display = "grid";
+  grid.style.gridTemplateColumns = "repeat(6, minmax(0, 1fr))";
+  grid.style.gap = "16px";
+  grid.style.gridAutoRows = "180px";
+  grid.style.gridAutoFlow = "dense";
+
+  topGames.forEach((game, index) => {
+    const tile = document.createElement("div");
+    tile.className = "relative min-w-0 overflow-hidden rounded-2xl bg-slate-800/80 shadow-md flex items-center justify-center";
+
+    // Playtime Size Hierarchy:
+    // Top 1: 3x3 Giant Square (or 2x2 if small list)
+    // Top 2-4: 2x2 Medium Square
+    // Others: 1x1 Standard Square
+    const ratio = maxPlaytimeSeconds > 0 ? game.playtimeSeconds / maxPlaytimeSeconds : 0;
+
+    if (index === 0) {
+      if (topGames.length >= 7) {
+        tile.style.gridColumn = "span 3";
+        tile.style.gridRow = "span 3";
+      } else {
+        tile.style.gridColumn = "span 2";
+        tile.style.gridRow = "span 2";
+      }
+    } else if (index >= 1 && index <= 3 && ratio >= 0.2) {
+      tile.style.gridColumn = "span 2";
+      tile.style.gridRow = "span 2";
+    } else {
+      tile.style.gridColumn = "span 1";
+      tile.style.gridRow = "span 1";
+    }
+
+    const coverDataUrl = coverDataUrls[game.id];
+    if (game.iconUrl && coverDataUrl && coverDataUrl !== EXPORT_PLACEHOLDER) {
+      // Pure edge-to-edge square cover image
+      const img = document.createElement("img");
+      img.src = coverDataUrl;
+      img.alt = game.name;
+      img.className = "w-full h-full object-cover object-center rounded-2xl";
+      tile.appendChild(img);
+    } else {
+      const fallback = document.createElement("div");
+      fallback.className = "w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-4 text-center";
+      const charSpan = document.createElement("span");
+      charSpan.className = "text-3xl font-extrabold text-white/80";
+      charSpan.textContent = game.name.charAt(0);
+      fallback.appendChild(charSpan);
+      tile.appendChild(fallback);
+    }
+
+    grid.appendChild(tile);
+  });
+
+  container.appendChild(grid);
+  return container;
 }
 
 export default function GameCollage({
@@ -436,7 +352,6 @@ export default function GameCollage({
   maxGames,
   periodLabel = "all titles",
 }: GameCollageProps) {
-  const cardRef = useRef<HTMLDivElement>(null);
   const previewUrlRef = useRef<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -448,79 +363,98 @@ export default function GameCollage({
     };
   }, []);
 
-  const topGames: CollageGame[] = useMemo(
-    () => {
-      const rankedGames = [...games]
-        .filter(isPlayed)
-        .sort(
-          (a, b) =>
-            b.playtimeSeconds - a.playtimeSeconds ||
-            b.trophyProgress - a.trophyProgress
-        );
-      const visibleGames = maxGames === undefined
-        ? rankedGames
-        : rankedGames.slice(0, maxGames);
-      const maxPlaytimeSeconds = visibleGames[0]?.playtimeSeconds || 0;
-
-      return visibleGames.map((game, index) => ({
-        game,
-        exportScale: getExportScale(game.playtimeSeconds, maxPlaytimeSeconds, index),
-      }));
-    },
-    [games, maxGames]
-  );
+  const topGames = useMemo(() => {
+    const rankedGames = [...games]
+      .filter(isPlayed)
+      .sort((a, b) => b.playtimeSeconds - a.playtimeSeconds || b.trophyProgress - a.trophyProgress);
+    return maxGames === undefined ? rankedGames : rankedGames.slice(0, maxGames);
+  }, [games, maxGames]);
 
   const downloadCollage = async () => {
-    const sourceRoot = cardRef.current;
-    if (!sourceRoot) return;
+    if (topGames.length === 0) return;
     setDownloading(true);
     setDownloadError(null);
 
-    let exportRoot: HTMLElement | null = null;
     let exportHost: HTMLDivElement | null = null;
     try {
-      await waitForImages(sourceRoot);
+      // 1. Preload ALL images as Data URLs in memory FIRST with 4-tier fallback
+      const { avatarDataUrl, coverDataUrls } = await preloadAllImageDataUrls(topGames, userAvatar);
 
-      exportRoot = sourceRoot.cloneNode(true) as HTMLElement;
-      const bounds = sourceRoot.getBoundingClientRect();
-      exportRoot.style.width = `${bounds.width}px`;
-      exportRoot.style.maxWidth = "none";
-      exportRoot.setAttribute("aria-hidden", "true");
+      // 2. Build independent 1200px offscreen poster container using fully loaded Data URLs
+      const exportPoster = buildExportPoster(
+        topGames,
+        avatarDataUrl,
+        coverDataUrls,
+        userName,
+        psnId,
+        userAvatar,
+        periodLabel
+      );
 
       exportHost = document.createElement("div");
       exportHost.style.position = "fixed";
-      exportHost.style.left = "0";
-      exportHost.style.top = "0";
-      exportHost.style.width = `${bounds.width}px`;
-      exportHost.style.opacity = "0";
-      exportHost.style.zIndex = "-1";
+      exportHost.style.left = "-9999px";
+      exportHost.style.top = "-9999px";
+      exportHost.style.width = "1200px";
+      exportHost.style.zIndex = "-9999";
       exportHost.style.pointerEvents = "none";
-      exportHost.appendChild(exportRoot);
+      exportHost.appendChild(exportPoster);
       document.body.appendChild(exportHost);
-      const exportGrid = exportRoot.querySelector<HTMLElement>("[data-collage-grid]");
-      applyExportLayout(
-        exportRoot,
-        topGames,
-        exportGrid?.getBoundingClientRect().width || bounds.width
-      );
-      await inlineImages(sourceRoot, exportRoot);
-      await waitForImages(exportRoot);
 
-      const blob = await toBlob(exportRoot, {
-        cacheBust: false,
-        pixelRatio: 2,
-        backgroundColor: "#101827",
-        imagePlaceholder: EXPORT_PLACEHOLDER,
-        onImageErrorHandler: () => undefined,
-      });
-      if (!blob) throw new Error("The collage image was empty.");
+      // Give browser a short tick to process layout
+      await wait(100);
 
+      // 3. Render HD PNG Blob (with pixelRatio 2, falling back to 1.5/1.0 if canvas limits hit)
+      let blob: Blob | null = null;
+
+      try {
+        blob = await toBlob(exportPoster, {
+          cacheBust: false,
+          pixelRatio: 2,
+          backgroundColor: "#0f172a",
+          fontEmbedCSS: "",
+          imagePlaceholder: EXPORT_PLACEHOLDER,
+          onImageErrorHandler: () => undefined,
+        });
+      } catch (err) {
+        console.warn("toBlob pixelRatio 2 failed, trying pixelRatio 1.5:", err);
+      }
+
+      if (!blob || blob.size === 0) {
+        await wait(150);
+        blob = await toBlob(exportPoster, {
+          cacheBust: true,
+          pixelRatio: 1.5,
+          backgroundColor: "#0f172a",
+          fontEmbedCSS: "",
+          imagePlaceholder: EXPORT_PLACEHOLDER,
+          onImageErrorHandler: () => undefined,
+        });
+      }
+
+      if (!blob || blob.size === 0) {
+        blob = await toBlob(exportPoster, {
+          cacheBust: true,
+          pixelRatio: 1,
+          backgroundColor: "#0f172a",
+          fontEmbedCSS: "",
+          imagePlaceholder: EXPORT_PLACEHOLDER,
+          onImageErrorHandler: () => undefined,
+        });
+      }
+
+      if (!blob || blob.size === 0) {
+        throw new Error("拼图生成结果为空，请检查网络或刷新页面后重试。");
+      }
+
+      // 4. ONLY AFTER image generation cleanly succeeds: trigger download dialog!
       const objectUrl = URL.createObjectURL(blob);
       if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
       previewUrlRef.current = objectUrl;
       setPreviewUrl(objectUrl);
+
       const link = document.createElement("a");
-      link.download = "playstation-game-collage.png";
+      link.download = `playstation-collage-${psnId || "stats"}.png`;
       link.href = objectUrl;
       link.style.display = "none";
       document.body.appendChild(link);
@@ -528,7 +462,8 @@ export default function GameCollage({
       link.remove();
     } catch (error) {
       console.error("Unable to export collage:", error);
-      setDownloadError("拼图导出失败，请稍后重试。");
+      const errMsg = error instanceof Error ? error.message : String(error);
+      setDownloadError(`拼图导出失败: ${errMsg}`);
     } finally {
       exportHost?.remove();
       setDownloading(false);
@@ -539,19 +474,15 @@ export default function GameCollage({
 
   return (
     <div className="space-y-3">
-      <div
-        ref={cardRef}
-        className="rounded-2xl overflow-hidden bg-[#101827] text-white p-5"
-      >
+      {/* On-Page Dashboard Display Card */}
+      <div className="rounded-2xl overflow-hidden bg-[#101827] text-white p-5">
         <div className="flex items-center justify-between gap-4 mb-5">
           <div className="flex items-center gap-3 min-w-0">
             {userAvatar ? (
               <img
                 src={getExportImageUrl(userAvatar)}
-                data-export-src={getExportImageUrl(userAvatar)}
-                data-original-src={normalizeImageUrl(userAvatar)}
                 alt=""
-                className="h-10 w-10 rounded-full object-cover"
+                className="h-10 w-10 rounded-full object-cover border border-white/20"
                 onError={(event) => handleImageError(event, userAvatar)}
               />
             ) : (
@@ -561,7 +492,7 @@ export default function GameCollage({
             )}
             <div className="min-w-0">
               <p className="font-semibold truncate">{userName || "PlayStation player"}</p>
-              <p className="text-xs text-white/60 truncate">{psnId || "PSN"} · Trophy journey</p>
+              <p className="text-xs text-white/60 truncate">{psnId || "PSN"}</p>
             </div>
           </div>
           <div className="text-right shrink-0">
@@ -570,35 +501,24 @@ export default function GameCollage({
           </div>
         </div>
 
-        <div data-collage-grid className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {topGames.map(({ game, exportScale }) => (
+        {/* Dashboard Preview Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+          {topGames.map((game) => (
             <div
               key={game.id}
-              data-collage-tile
-              data-rectangular={isPS4Platform(game.platform) ? "true" : "false"}
-              data-export-scale={exportScale}
-              className="relative min-w-0 overflow-hidden rounded-xl bg-white/10"
+              className="group relative flex flex-col items-center justify-center min-w-0 rounded-xl overflow-hidden bg-white/10"
             >
-              <div
-                data-collage-cover-frame
-                className={`${gameCoverAspectClass(game.platform)} flex w-full items-center justify-center`}
-              >
-                {game.iconUrl ? (
-                  <img
-                    src={getExportImageUrl(game.iconUrl)}
-                    data-export-src={getExportImageUrl(game.iconUrl)}
-                    data-original-src={normalizeImageUrl(game.iconUrl)}
-                    alt={game.name}
-                    className={`w-full ${gameCoverImageHeightClass(game.platform)} ${gameCoverObjectFit(game.platform)}`}
-                    onError={(event) => handleImageError(event, game.iconUrl)}
-                  />
-                ) : (
-                  <div className="h-full w-full flex items-center justify-center bg-blue-900/50 text-2xl font-bold">{game.name.charAt(0)}</div>
-                )}
-              </div>
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-2 pt-8">
-                <p className="text-xs font-semibold truncate">{game.name}</p>
-                <p className="text-[10px] text-white/70">{game.trophyProgress}% · {formatDuration(game.playtimeSeconds)} · {platformLabel(game.platform)}</p>
+              <div className={`${gameCoverAspectClass(game.platform)} relative w-full overflow-hidden bg-muted`}>
+                <img
+                  src={game.iconUrl || EXPORT_PLACEHOLDER}
+                  alt={game.name}
+                  className={`w-full ${gameCoverImageHeightClass(game.platform)} ${gameCoverObjectFit(game.platform)} transition-transform group-hover:scale-105`}
+                  loading="lazy"
+                />
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-2 pt-6">
+                  <p className="text-xs font-semibold text-white truncate">{game.name}</p>
+                  <p className="text-[10px] text-white/70">{game.trophyProgress}% · {formatDuration(game.playtimeSeconds)} · {platformLabel(game.platform)}</p>
+                </div>
               </div>
             </div>
           ))}
@@ -608,7 +528,7 @@ export default function GameCollage({
       <div className="flex justify-end">
         <Button variant="outline" size="sm" onClick={downloadCollage} disabled={downloading} className="gap-2">
           {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-          导出拼图
+          {downloading ? "正在生成拼图..." : "导出拼图"}
         </Button>
       </div>
       {previewUrl && (
@@ -617,7 +537,7 @@ export default function GameCollage({
           <img src={previewUrl} alt="拼图导出预览" className="w-full rounded-2xl border border-border" />
         </div>
       )}
-      {downloadError && <p className="text-right text-sm text-destructive">{downloadError}</p>}
+      {downloadError && <p className="text-right text-sm text-destructive font-medium">{downloadError}</p>}
     </div>
   );
 }

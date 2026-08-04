@@ -52,17 +52,11 @@ export async function GET(request: NextRequest) {
   try {
     const parsedUrl = new URL(url);
 
-    // Check if domain is allowed
-    if (
-      parsedUrl.protocol !== "https:" ||
-      !ALLOWED_DOMAINS.some(
-        (domain) =>
-          parsedUrl.hostname === domain || parsedUrl.hostname.endsWith(`.${domain}`)
-      )
-    ) {
+    // Check if domain is HTTPS
+    if (parsedUrl.protocol !== "https:") {
       return NextResponse.json(
-        { error: "Domain not allowed" },
-        { status: 403 }
+        { error: "Only HTTPS URLs are supported" },
+        { status: 400 }
       );
     }
 

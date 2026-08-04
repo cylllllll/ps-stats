@@ -19,9 +19,9 @@ export default function TimelinePage() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold">Game Timeline</h1>
+        <h1 className="text-2xl font-bold">游戏时间线</h1>
         <p className="text-muted-foreground mt-1">
-          A journey through your gaming history
+          重温你的游戏历程
         </p>
       </div>
 

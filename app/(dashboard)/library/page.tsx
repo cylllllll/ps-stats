@@ -121,7 +121,7 @@ export default function LibraryPage() {
                   <TableCell className="px-2 sm:px-4 text-xs text-muted-foreground">{index + 1}</TableCell>
                   <TableCell className="px-2 sm:px-4 py-2 sm:py-3">
                     <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                      {game.iconUrl ? <img src={game.iconUrl} alt="" className={`w-9 h-9 sm:w-12 ${gameCoverFixedHeightClass(game.platform, "h-10")} sm:${gameCoverFixedHeightClass(game.platform, "h-12")} rounded-lg ${gameCoverObjectFit(game.platform)} bg-muted shrink-0`} loading="lazy" /> : <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-lg bg-muted flex items-center justify-center shrink-0"><Gamepad2 className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" /></div>}
+                      {game.iconUrl ? <img src={game.iconUrl} alt="" className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg object-cover bg-muted shrink-0" loading="lazy" /> : <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg bg-muted flex items-center justify-center shrink-0"><Gamepad2 className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" /></div>}
                       <div className="min-w-0 flex-1">
                         <p className="font-medium truncate text-xs sm:text-sm max-w-[125px] xs:max-w-[180px] sm:max-w-[260px]">{game.name}</p>
                         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] sm:text-[11px] text-muted-foreground mt-0.5">

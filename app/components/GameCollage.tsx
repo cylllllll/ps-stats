@@ -132,47 +132,57 @@ async function urlToDataUrl(originalUrl: string): Promise<string> {
   if (!normalized) return EXPORT_PLACEHOLDER;
   if (normalized.startsWith("data:")) return normalized;
 
-  // Tier 1: Proxy URL fetch with timeout
   const proxyUrl = getExportImageUrl(normalized);
+
+  // Tier 1: Proxy URL fetch with generous 12s timeout
   try {
-    const res = await fetchWithTimeout(proxyUrl, { cache: "force-cache" }, 4000);
+    const res = await fetchWithTimeout(proxyUrl, { cache: "force-cache" }, 12000);
     if (res.ok) {
       const blob = await res.blob();
       if (blob.size > 0) {
-        return await imageBlobToDataUrl(blob);
+        const dataUrl = await imageBlobToDataUrl(blob);
+        if (dataUrl && dataUrl !== EXPORT_PLACEHOLDER) return dataUrl;
+      }
+    }
+  } catch {
+    // Continue to Tier 1 Retry
+  }
+
+  // Tier 1 Retry: Retry Proxy URL fetch with 15s timeout
+  try {
+    const res = await fetchWithTimeout(proxyUrl, { cache: "default" }, 15000);
+    if (res.ok) {
+      const blob = await res.blob();
+      if (blob.size > 0) {
+        const dataUrl = await imageBlobToDataUrl(blob);
+        if (dataUrl && dataUrl !== EXPORT_PLACEHOLDER) return dataUrl;
       }
     }
   } catch {
     // Continue
   }
 
-  // Tier 2: Direct URL fetch with timeout
+  // Tier 2: HTMLImageElement + 2D Canvas render via proxy
   try {
-    const res = await fetchWithTimeout(normalized, { mode: "cors", cache: "force-cache" }, 4000);
-    if (res.ok) {
-      const blob = await res.blob();
-      if (blob.size > 0) {
-        return await imageBlobToDataUrl(blob);
-      }
-    }
+    const dataUrl = await imageElementToDataUrl(proxyUrl);
+    if (dataUrl && dataUrl !== EXPORT_PLACEHOLDER) return dataUrl;
   } catch {
     // Continue
   }
 
-  // Tier 3: HTMLImageElement + 2D Canvas render
+  // Tier 3: HTMLImageElement + 2D Canvas render via direct URL
   try {
-    return await imageElementToDataUrl(proxyUrl);
+    const dataUrl = await imageElementToDataUrl(normalized);
+    if (dataUrl && dataUrl !== EXPORT_PLACEHOLDER) return dataUrl;
   } catch {
-    try {
-      return await imageElementToDataUrl(normalized);
-    } catch {
-      return EXPORT_PLACEHOLDER;
-    }
+    // Continue
   }
+
+  return EXPORT_PLACEHOLDER;
 }
 
 function imageElementToDataUrl(src: string): Promise<string> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
@@ -195,29 +205,28 @@ function imageElementToDataUrl(src: string): Promise<string> {
 
 /**
  * Preloads all cover images and avatar as Data URLs in memory before creating the export DOM.
- * Batched in pools of 4 to prevent socket exhaustion.
+ * All images start fetching in parallel immediately for fast, reliable first-time export.
  */
 async function preloadAllImageDataUrls(
   games: PlayStationGame[],
   userAvatar?: string
 ): Promise<{ avatarDataUrl: string; coverDataUrls: Record<string, string> }> {
   const coverDataUrls: Record<string, string> = {};
-  let avatarDataUrl = EXPORT_PLACEHOLDER;
 
-  if (userAvatar) {
-    avatarDataUrl = await urlToDataUrl(userAvatar);
-  }
+  const avatarPromise = userAvatar ? urlToDataUrl(userAvatar) : Promise.resolve(EXPORT_PLACEHOLDER);
 
-  const BATCH_SIZE = 4;
-  for (let i = 0; i < games.length; i += BATCH_SIZE) {
-    const batch = games.slice(i, i + BATCH_SIZE);
-    await Promise.all(
-      batch.map(async (game) => {
-        if (!game.iconUrl) return;
-        coverDataUrls[game.id] = await urlToDataUrl(game.iconUrl);
-      })
-    );
-  }
+  const coverPromises = games.map(async (game) => {
+    if (!game.iconUrl) return;
+    const dataUrl = await urlToDataUrl(game.iconUrl);
+    if (dataUrl && dataUrl !== EXPORT_PLACEHOLDER) {
+      coverDataUrls[game.id] = dataUrl;
+    }
+  });
+
+  const [avatarDataUrl] = await Promise.all([
+    avatarPromise,
+    Promise.all(coverPromises),
+  ]);
 
   return { avatarDataUrl, coverDataUrls };
 }
@@ -321,8 +330,8 @@ function buildExportPoster(
       tile.style.gridRow = "span 1";
     }
 
-    const coverDataUrl = coverDataUrls[game.id];
-    if (game.iconUrl && coverDataUrl && coverDataUrl !== EXPORT_PLACEHOLDER) {
+    const coverDataUrl = coverDataUrls[game.id] || (game.iconUrl ? getExportImageUrl(game.iconUrl) : null);
+    if (coverDataUrl) {
       // Pure edge-to-edge square cover image
       const img = document.createElement("img");
       img.src = coverDataUrl;

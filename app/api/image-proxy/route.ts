@@ -60,17 +60,26 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Fetch the image
-    const response = await fetch(url, {
-      headers: {
-        Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Referer: "https://www.playstation.com/",
-      },
-      redirect: "follow",
-      next: { revalidate: 86400 }, // Cache for 24 hours
-    });
+    // Fetch the image with 10s timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        headers: {
+          Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Referer: "https://www.playstation.com/",
+        },
+        redirect: "follow",
+        signal: controller.signal,
+        next: { revalidate: 86400 }, // Cache for 24 hours
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
       return NextResponse.json(
@@ -101,8 +110,9 @@ export async function GET(request: NextRequest) {
     return new NextResponse(buffer, {
       headers: {
         "Content-Type": contentType,
-        "Cache-Control": "public, max-age=86400", // Cache for 24 hours
+        "Cache-Control": "public, max-age=86400, s-maxage=86400, immutable",
         "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
         "X-Content-Type-Options": "nosniff",
       },
     });

@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PlatformBadge from "@/app/components/PlatformBadge";
 import type { PlayStationGame } from "@/app/types/playstation";
 import {
+  hasTrophyData,
   PLATFORM_DISTRIBUTION_ORDER,
   platformDistributionLabel,
 } from "@/lib/playstation";
@@ -21,6 +22,7 @@ const PLATFORM_COLORS: Record<(typeof PLATFORM_DISTRIBUTION_ORDER)[number], stri
 
 export default function PlaytimeChart({ games }: { games: PlayStationGame[] }) {
   const { topGames, durationRanges, progressRanges, platforms, totalPlatformGames } = useMemo(() => {
+    const trophyGames = games.filter(hasTrophyData);
     const topGames = [...games].sort((a, b) => b.playtimeSeconds - a.playtimeSeconds).slice(0, 10).map((game) => ({ name: game.name.length > 16 ? `${game.name.slice(0, 16)}…` : game.name, hours: Number((game.playtimeSeconds / 3600).toFixed(1)) }));
     const ranges = [
       { range: "0h", min: 0, max: 1 },
@@ -36,7 +38,7 @@ export default function PlaytimeChart({ games }: { games: PlayStationGame[] }) {
       { range: "25–50%", min: 25, max: 50 },
       { range: "50–99%", min: 50, max: 100 },
       { range: "100%", min: 100, max: 101 },
-    ].map(({ range, min, max }) => ({ range, count: games.filter((game) => game.trophyProgress >= min && game.trophyProgress < max).length }));
+    ].map(({ range, min, max }) => ({ range, count: trophyGames.filter((game) => game.trophyProgress >= min && game.trophyProgress < max).length }));
     const platformCounts = new Map<PlatformDistributionLabel, number>(
       PLATFORM_DISTRIBUTION_ORDER.map((name) => [name, 0] as const)
     );
@@ -54,7 +56,7 @@ export default function PlaytimeChart({ games }: { games: PlayStationGame[] }) {
     return { topGames, durationRanges, progressRanges, platforms, totalPlatformGames };
   }, [games]);
 
-  if (!games.length) return <div className="py-16 text-center text-muted-foreground">暂无游戏数据</div>;
+  if (!games.length) return <div className="py-16 text-center text-muted-foreground">暂无游戏或 App 数据</div>;
 
   return (
     <div className="space-y-6">
@@ -66,7 +68,7 @@ export default function PlaytimeChart({ games }: { games: PlayStationGame[] }) {
               <XAxis dataKey="range" tick={{ fontSize: 11 }} />
               <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
               <Tooltip />
-              <Bar dataKey="count" name="游戏数" fill="#2563eb" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="count" name="项目数" fill="#2563eb" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -134,7 +136,7 @@ export default function PlaytimeChart({ games }: { games: PlayStationGame[] }) {
                     <Cell key={entry.name} fill={PLATFORM_COLORS[entry.name]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value) => [`${value} 款游戏`, "数量"]} />
+                <Tooltip formatter={(value) => [`${value} 项`, "数量"]} />
               </PieChart>
             </ResponsiveContainer>
 
@@ -149,7 +151,7 @@ export default function PlaytimeChart({ games }: { games: PlayStationGame[] }) {
                     style={{ backgroundColor: PLATFORM_COLORS[entry.name] }}
                   />
                   <PlatformBadge platform={entry.name} />
-                  <span className="font-bold text-foreground">{entry.value} 款</span>
+                  <span className="font-bold text-foreground">{entry.value} {entry.name === "App" ? "个" : "款"}</span>
                   {totalPlatformGames > 0 && (
                     <span className="text-muted-foreground text-[11px]">
                       ({((entry.value / totalPlatformGames) * 100).toFixed(1)}%)
@@ -161,7 +163,7 @@ export default function PlaytimeChart({ games }: { games: PlayStationGame[] }) {
           </div>
         </ChartCard>
       </div>
-      <p className="text-xs text-muted-foreground text-center">PSN 的游玩时长由 PlayStation 活动记录提供；部分游戏可能没有时长数据。</p>
+      <p className="text-xs text-muted-foreground text-center">PSN 的游玩时长由 PlayStation 活动记录提供；部分游戏或 App 可能没有时长数据。</p>
     </div>
   );
 }

@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useGamesStore } from "@/lib/stores/useGamesStore";
 import type { PlayStationGame } from "@/app/types/playstation";
-import { formatDate, formatDuration, isPS4Platform, platformLabel } from "@/lib/playstation";
+import { formatDate, formatDuration, hasTrophyData, isAppPlatform } from "@/lib/playstation";
 import { useI18n } from "@/lib/i18n";
 import PlatformBadge from "@/app/components/PlatformBadge";
 
@@ -46,8 +46,10 @@ export default function LibraryPage() {
   }, [games, query, sortDirection, sortField]);
 
   const totalPlaytime = games.reduce((sum, game) => sum + game.playtimeSeconds, 0);
-  const averageProgress = games.length
-    ? games.reduce((sum, game) => sum + game.trophyProgress, 0) / games.length
+  const trophyGames = games.filter(hasTrophyData);
+  const appCount = games.filter((game) => isAppPlatform(game.platform)).length;
+  const averageProgress = trophyGames.length
+    ? trophyGames.reduce((sum, game) => sum + game.trophyProgress, 0) / trophyGames.length
     : 0;
 
   const changeSort = (field: SortField) => {
@@ -77,9 +79,9 @@ export default function LibraryPage() {
       </div>
 
       <div className="grid grid-cols-3 gap-2 sm:gap-4">
-        <SummaryCard icon={<Gamepad2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />} label="游戏总数" value={games.length.toLocaleString()} />
+        <SummaryCard icon={<Gamepad2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />} label="项目总数" value={games.length.toLocaleString()} detail={`${games.length - appCount} 款游戏 · ${appCount} 个 App`} />
         <SummaryCard icon={<Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4" />} label="游玩时长" value={formatDuration(totalPlaytime)} />
-        <SummaryCard icon={<Trophy className="h-3.5 w-3.5 sm:h-4 sm:w-4" />} label="平均奖杯进度" value={`${averageProgress.toFixed(1)}%`} />
+        <SummaryCard icon={<Trophy className="h-3.5 w-3.5 sm:h-4 sm:w-4" />} label="平均奖杯进度" value={`${averageProgress.toFixed(1)}%`} detail={`${trophyGames.length} 款有奖杯`} />
       </div>
 
       <Card>
@@ -98,7 +100,7 @@ export default function LibraryPage() {
               <SortButton field="name" activeField={sortField} direction={sortDirection} onClick={changeSort} label={t.library.sortName} />
             </div>
           </div>
-          <p className="text-[11px] sm:text-xs text-muted-foreground mt-2 sm:mt-3">{query ? `找到 ${filteredGames.length} 款游戏` : t.library.gameCount.replace("{count}", String(filteredGames.length))}</p>
+          <p className="text-[11px] sm:text-xs text-muted-foreground mt-2 sm:mt-3">{query ? `找到 ${filteredGames.length} 个项目` : `${filteredGames.length} 个游戏或 App`}</p>
         </CardContent>
       </Card>
 
@@ -108,7 +110,7 @@ export default function LibraryPage() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-8 sm:w-12 px-2 sm:px-4 text-xs">#</TableHead>
-                <TableHead className="px-2 sm:px-4 text-xs sm:text-sm">游戏</TableHead>
+                <TableHead className="px-2 sm:px-4 text-xs sm:text-sm">游戏 / App</TableHead>
                 <TableHead className="px-2 sm:px-4 text-xs sm:text-sm">奖杯进度</TableHead>
                 <TableHead className="hidden sm:table-cell px-4 text-sm">游玩时长</TableHead>
                 <TableHead className="hidden md:table-cell px-4 text-sm">启动次数</TableHead>
@@ -125,11 +127,7 @@ export default function LibraryPage() {
                         <img
                           src={game.iconUrl}
                           alt=""
-                          className={
-                            isPS4Platform(game.platform)
-                              ? "w-9 sm:w-11 h-auto rounded-md object-contain bg-muted/60 shrink-0"
-                              : "w-9 h-9 sm:w-11 sm:h-11 rounded-lg object-cover bg-muted shrink-0"
-                          }
+                          className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg object-cover bg-muted shrink-0"
                           loading="lazy"
                         />
                       ) : (
@@ -157,7 +155,7 @@ export default function LibraryPage() {
             </TableBody>
           </Table>
         </div>
-        {filteredGames.length === 0 && <div className="py-12 text-center text-muted-foreground text-xs sm:text-sm">{query ? `没有找到“${query}”` : "暂无游戏数据"}</div>}
+        {filteredGames.length === 0 && <div className="py-12 text-center text-muted-foreground text-xs sm:text-sm">{query ? `没有找到“${query}”` : "暂无游戏或 App 数据"}</div>}
       </Card>
     </div>
   );
@@ -173,6 +171,10 @@ function SortButton({ field, activeField, direction, onClick, label }: { field: 
 }
 
 function ProgressCell({ game }: { game: PlayStationGame }) {
+  if (!hasTrophyData(game)) {
+    return <span className="text-[10px] sm:text-xs text-muted-foreground">无奖杯</span>;
+  }
+
   const is100 = game.trophyProgress >= 100;
   const color = is100
     ? "platinum-shimmer"
@@ -183,5 +185,7 @@ function ProgressCell({ game }: { game: PlayStationGame }) {
 }
 
 function TrophyCounts({ game }: { game: PlayStationGame }) {
+  if (!hasTrophyData(game)) return null;
+
   return <div className="flex flex-wrap items-center gap-x-2 text-xs"><span className="text-slate-500">{game.earnedTrophies.platinum} 白金</span><span className="text-amber-600">{game.earnedTrophies.gold} 金</span><span className="text-slate-500">{game.earnedTrophies.silver} 银</span><span className="text-orange-600">{game.earnedTrophies.bronze} 铜</span></div>;
 }

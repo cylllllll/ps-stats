@@ -88,6 +88,8 @@ export function formatDate(timestamp: number): string {
 }
 
 export function platformLabel(platform: string): string {
+  if (isAppPlatform(platform)) return "App";
+
   return platform
     .replace("ps5_native_game", "PS5")
     .replace("ps4_game", "PS4")
@@ -107,6 +109,22 @@ export const PLATFORM_DISTRIBUTION_ORDER = [
 export type PlatformDistributionLabel =
   (typeof PLATFORM_DISTRIBUTION_ORDER)[number];
 
+function normalizedPlatformKey(platform: string): string {
+  return (platform || "")
+    .normalize("NFKC")
+    .toLocaleLowerCase()
+    .replace(/[\s,_/-]+/g, "");
+}
+
+export function isAppPlatform(platform: string): boolean {
+  const normalized = normalizedPlatformKey(platform);
+  return (
+    normalized.includes("mediaapp") ||
+    normalized === "app" ||
+    normalized.includes("application")
+  );
+}
+
 /**
  * Collapse the different platform values returned by PSN into the
  * groups used by the charts page. PC is categorized under PS5.
@@ -114,18 +132,9 @@ export type PlatformDistributionLabel =
 export function platformDistributionLabel(
   platform: string
 ): PlatformDistributionLabel {
-  const normalized = (platform || "")
-    .normalize("NFKC")
-    .toLocaleLowerCase()
-    .replace(/[\s,_/-]+/g, "");
+  const normalized = normalizedPlatformKey(platform);
 
-  if (
-    normalized.includes("mediaapp") ||
-    normalized === "app" ||
-    normalized.includes("application")
-  ) {
-    return "App";
-  }
+  if (isAppPlatform(platform)) return "App";
   if (
     normalized.includes("ps5") ||
     normalized.includes("pspc") ||
@@ -150,23 +159,4 @@ const PS4_PLATFORM_PATTERN = /(?:^|[,/\s])ps4(?:$|[,/_\s])/i;
 
 export function isPS4Platform(platform: string): boolean {
   return PS4_PLATFORM_PATTERN.test(platform);
-}
-
-export function gameCoverObjectFit(platform: string): "object-contain" | "object-cover" {
-  return isPS4Platform(platform) ? "object-contain" : "object-cover";
-}
-
-export function gameCoverAspectClass(platform: string): "aspect-auto" | "aspect-square" {
-  return isPS4Platform(platform) ? "aspect-auto" : "aspect-square";
-}
-
-export function gameCoverImageHeightClass(platform: string): "h-auto" | "h-full" {
-  return isPS4Platform(platform) ? "h-auto" : "h-full";
-}
-
-export function gameCoverFixedHeightClass(
-  platform: string,
-  squareHeight: "h-10" | "h-12" | "h-20"
-): "h-auto" | "h-10" | "h-12" | "h-20" {
-  return isPS4Platform(platform) ? "h-auto" : squareHeight;
 }

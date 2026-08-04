@@ -14,7 +14,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useGamesStore } from "@/lib/stores/useGamesStore";
-import { formatDate, formatDuration, gameCoverAspectClass, gameCoverImageHeightClass, gameCoverObjectFit, incompleteTrophyGames, isPlayed, isPlayedInYear, platformLabel } from "@/lib/playstation";
+import { formatDate, formatDuration, hasTrophyData, incompleteTrophyGames, isAppPlatform, isPlayedInYear } from "@/lib/playstation";
 import GameCollage from "@/app/components/GameCollage";
 import PlatformBadge from "@/app/components/PlatformBadge";
 
@@ -31,7 +31,10 @@ export default function DashboardPage() {
 
   const currentYear = new Date().getFullYear();
   const overviewGames = games.filter((game) => isPlayedInYear(game, currentYear));
-  const playedGames = overviewGames.filter(isPlayed);
+  const overviewAppCount = overviewGames.filter((game) => isAppPlatform(game.platform)).length;
+  const overviewGameCount = overviewGames.length - overviewAppCount;
+  const libraryAppCount = games.filter((game) => isAppPlatform(game.platform)).length;
+  const collageGames = overviewGames.filter((game) => !isAppPlatform(game.platform));
   const incompleteGames = incompleteTrophyGames(games);
   const totalPlaytime = overviewGames.reduce((sum, game) => sum + game.playtimeSeconds, 0);
   const earnedTrophies = overviewGames.reduce(
@@ -102,14 +105,14 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title={`${currentYear} 游玩时长`} value={formatDuration(totalPlaytime)} icon={<Clock className="h-4 w-4 text-blue-500" />} className="from-blue-500/10 to-purple-500/10 border-blue-500/20" />
-        <StatCard title="今年游戏数" value={overviewGames.length.toLocaleString()} detail={`${playedGames.length} 款有活动记录`} icon={<Gamepad2 className="h-4 w-4 text-green-500" />} className="from-green-500/10 to-emerald-500/10 border-green-500/20" />
+        <StatCard title="今年项目数" value={overviewGames.length.toLocaleString()} detail={`${overviewGameCount} 款游戏 · ${overviewAppCount} 个 App`} icon={<Gamepad2 className="h-4 w-4 text-green-500" />} className="from-green-500/10 to-emerald-500/10 border-green-500/20" />
         <StatCard title="今年奖杯数" value={earnedTrophies.toLocaleString()} icon={<Trophy className="h-4 w-4 text-amber-500" />} className="from-amber-500/10 to-orange-500/10 border-amber-500/20" />
         <StatCard title="今年最近活动" value={recentGames[0]?.name || "暂无记录"} detail={recentGames[0] ? formatDate(Math.max(recentGames[0].lastPlayedAt, recentGames[0].lastTrophyAt)) : ""} icon={<Calendar className="h-4 w-4 text-pink-500" />} className="from-pink-500/10 to-rose-500/10 border-pink-500/20" isTextValue={true} />
       </div>
 
-      {overviewGames.length > 0 && (
+      {collageGames.length > 0 && (
         <GameCollage
-          games={overviewGames}
+          games={collageGames}
           userName={profile?.onlineId || psnId || undefined}
           psnId={psnId || undefined}
           userAvatar={profile?.avatarUrl || undefined}
@@ -118,7 +121,7 @@ export default function DashboardPage() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <QuickLink href="/library" icon={<Gamepad2 className="h-6 w-6 text-blue-500" />} title="游戏库" detail={`${games.length} 款游戏`} />
+        <QuickLink href="/library" icon={<Gamepad2 className="h-6 w-6 text-blue-500" />} title="游戏库" detail={`${games.length - libraryAppCount} 款游戏 · ${libraryAppCount} 个 App`} />
         <QuickLink href="/charts" icon={<Trophy className="h-6 w-6 text-purple-500" />} title="统计图表" detail="游玩与奖杯趋势" />
         <QuickLink href="/shame" icon={<Trophy className="h-6 w-6 text-red-500" />} title="待完成清单" detail={`${incompleteGames.length} 款未满成就`} />
       </div>
@@ -132,14 +135,13 @@ export default function DashboardPage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
             {recentGames.map((game) => (
               <div key={game.id} className="group min-w-0">
-                <div className={`${gameCoverAspectClass(game.platform)} flex items-center justify-center rounded-lg overflow-hidden bg-muted mb-2`}>
-                  <img src={game.iconUrl} alt={game.name} className={`w-full ${gameCoverImageHeightClass(game.platform)} ${gameCoverObjectFit(game.platform)} group-hover:scale-105 transition-transform`} loading="lazy" />
+                <div className="aspect-square flex items-center justify-center rounded-lg overflow-hidden bg-muted mb-2">
+                  <img src={game.iconUrl} alt={game.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" loading="lazy" />
                 </div>
                 <p className="text-sm font-medium truncate">{game.name}</p>
                 <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground mt-0.5">
                   <PlatformBadge platform={game.platform} />
-                  <span>·</span>
-                  <span>{game.trophyProgress}% 奖杯</span>
+                  {hasTrophyData(game) && <><span>·</span><span>{game.trophyProgress}% 奖杯</span></>}
                   <span>·</span>
                   <span>{formatDuration(game.playtimeSeconds)}</span>
                 </div>

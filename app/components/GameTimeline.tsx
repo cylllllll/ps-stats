@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { PlayStationGame } from "@/app/types/playstation";
-import { activityTimestamp, formatDate, formatDuration, gameCoverAspectClass, gameCoverFixedHeightClass, gameCoverObjectFit, platformLabel } from "@/lib/playstation";
+import { activityTimestamp, formatDate, formatDuration, hasTrophyData } from "@/lib/playstation";
 import PlatformBadge from "@/app/components/PlatformBadge";
 
 interface GameTimelineProps {
@@ -76,10 +76,10 @@ export default function GameTimeline({ games }: GameTimelineProps) {
 
   return (
     <div className="space-y-6">
-      {onThisDay.length > 0 && <Card className="border-primary/20 bg-primary/5"><CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" />历史上的今天</CardTitle><CardDescription>往年这个时候，你的 PSN 活动记录里出现过这些游戏</CardDescription></CardHeader><CardContent><GameList games={onThisDay} /></CardContent></Card>}
+      {onThisDay.length > 0 && <Card className="border-primary/20 bg-primary/5"><CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" />历史上的今天</CardTitle><CardDescription>往年这个时候，你的 PSN 活动记录里出现过这些游戏或 App</CardDescription></CardHeader><CardContent><GameList games={onThisDay} /></CardContent></Card>}
 
       <div className="grid md:grid-cols-2 gap-6">
-        <ActivityCard title="最近活跃" description="过去一周有游玩或奖杯活动的游戏" icon={<Gamepad2 className="h-4 w-4" />} games={recent} empty="暂无最近活动" />
+        <ActivityCard title="最近活跃" description="过去一周有游玩或奖杯活动的游戏与 App" icon={<Gamepad2 className="h-4 w-4" />} games={recent} empty="暂无最近活动" />
         <ActivityCard title="被搁置的游戏" description="一年以上没有活动，但仍有奖杯进度" icon={<Clock className="h-4 w-4" />} games={forgotten} empty="暂无被搁置的游戏" />
       </div>
 
@@ -98,9 +98,9 @@ function ActivityCard({ title, description, icon, games, empty }: { title: strin
 }
 
 function GameList({ games }: { games: PlayStationGame[] }) {
-  return <div className="space-y-3">{games.map((game, index) => <div key={`${game.id}-${index}`} className="flex items-center gap-3"><img src={game.iconUrl} alt="" className={`w-10 ${gameCoverFixedHeightClass(game.platform, "h-10")} rounded ${gameCoverObjectFit(game.platform)} bg-muted`} /><div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{game.name}</p><div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground mt-0.5"><PlatformBadge platform={game.platform} /><span>·</span><span>{game.trophyProgress}% 奖杯</span><span>·</span><span>{formatDuration(game.playtimeSeconds)}</span></div></div><Badge variant="outline" className="text-xs shrink-0">{formatDate(activityTimestamp(game))}</Badge></div>)}</div>;
+  return <div className="space-y-3">{games.map((game, index) => <div key={`${game.id}-${index}`} className="flex items-center gap-3"><img src={game.iconUrl} alt="" className="w-10 h-10 rounded object-cover bg-muted" /><div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{game.name}</p><div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground mt-0.5"><PlatformBadge platform={game.platform} />{hasTrophyData(game) && <><span>·</span><span>{game.trophyProgress}% 奖杯</span></>}<span>·</span><span>{formatDuration(game.playtimeSeconds)}</span></div></div><Badge variant="outline" className="text-xs shrink-0">{formatDate(activityTimestamp(game))}</Badge></div>)}</div>;
 }
 
 function GameTile({ game }: { game: PlayStationGame }) {
-  return <div className="group relative flex items-center justify-center"><img src={game.iconUrl} alt={game.name} className={`w-full ${gameCoverAspectClass(game.platform)} ${gameCoverObjectFit(game.platform)} rounded-lg transition-transform group-hover:scale-105 bg-muted`} /><div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2"><div><p className="text-white text-xs font-medium line-clamp-1">{game.name}</p><div className="flex flex-wrap items-center gap-1 text-white/80 text-[10px] mt-0.5"><PlatformBadge platform={game.platform} className="px-1 py-0 text-[9px] bg-white/20 text-white border-0" /><span>·</span><span>{formatDate(activityTimestamp(game))}</span><span>·</span><span>{game.trophyProgress}%</span></div></div></div></div>;
+  return <div className="group relative flex items-center justify-center"><img src={game.iconUrl} alt={game.name} className="w-full aspect-square object-cover rounded-lg transition-transform group-hover:scale-105 bg-muted" /><div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2"><div><p className="text-white text-xs font-medium line-clamp-1">{game.name}</p><div className="flex flex-wrap items-center gap-1 text-white/80 text-[10px] mt-0.5"><PlatformBadge platform={game.platform} className="px-1 py-0 text-[9px] bg-white/20 text-white border-0" /><span>·</span><span>{formatDate(activityTimestamp(game))}</span>{hasTrophyData(game) && <><span>·</span><span>{game.trophyProgress}%</span></>}</div></div></div></div>;
 }

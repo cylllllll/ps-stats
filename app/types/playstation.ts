@@ -32,6 +32,13 @@ export interface PSNPlayedConcept {
   localizedName?: {
     metadata?: Record<string, unknown>;
   };
+  media?: {
+    images?: Array<{
+      url?: string;
+      type?: string;
+      format?: string;
+    }>;
+  };
 }
 
 export interface PSNPlayedTitle {

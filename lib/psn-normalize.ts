@@ -6,6 +6,7 @@ import type {
   PlayStationGamesResponse,
   TrophyCounts,
 } from "@/app/types/playstation";
+import { isAppPlatform, isPS4Platform } from "@/lib/playstation";
 
 const TITLE_NAME_VARIANTS = [
   ["Neverness to Everness", "NTE: Neverness to Everness"],
@@ -136,10 +137,6 @@ function isDeathStrandingDirectorsCutTitle(title: PSNTrophyTitle): boolean {
   return normalizeName(title.trophyTitleName) === DEATH_STRANDING_DIRECTORS_CUT_NAME;
 }
 
-function isMediaApp(played: PSNPlayedTitle): boolean {
-  return String(played.category || "").toLocaleLowerCase().includes("media_app");
-}
-
 function parsePlayDuration(duration?: string): number {
   if (!duration) return 0;
 
@@ -179,8 +176,6 @@ function buildPlayedTitleIndex(playedTitles: PSNPlayedTitle[]): PlayedTitleIndex
   };
 
   for (const played of playedTitles) {
-    if (isMediaApp(played)) continue;
-
     const names = [
       ...new Set(playedNameCandidates(played).map(canonicalName)),
     ]
@@ -197,6 +192,10 @@ function buildPlayedTitleIndex(playedTitles: PSNPlayedTitle[]): PlayedTitleIndex
     };
 
     index.all.push(indexed);
+    // Keep apps available as played-only records, but never let their IDs or
+    // names participate in trophy-title matching.
+    if (isAppPlatform(played.category || "")) continue;
+
     const titleIds = new Set([
       played.titleId,
       ...(played.concept?.titleIds || []),
@@ -341,6 +340,29 @@ function safeCounts(value: Partial<TrophyCounts> | undefined): TrophyCounts {
   };
 }
 
+function preferredPlayedIconUrl(played?: PSNPlayedTitle): string {
+  const masterImageUrl = played?.concept?.media?.images?.find(
+    (image) => image.type?.toLocaleUpperCase() === "MASTER"
+  )?.url;
+
+  return (
+    masterImageUrl ||
+    played?.localizedImageUrl ||
+    played?.imageUrl ||
+    ""
+  );
+}
+
+function gameIconUrl(title: PSNTrophyTitle, played?: PSNPlayedTitle): string {
+  const trophyIconUrl = title.trophyTitleIconUrl || "";
+  const playedIconUrl = preferredPlayedIconUrl(played);
+  const platform = String(title.trophyTitlePlatform || played?.category || "");
+
+  return isPS4Platform(platform)
+    ? playedIconUrl || trophyIconUrl
+    : trophyIconUrl || playedIconUrl;
+}
+
 function normalizeGame(
   title: PSNTrophyTitle,
   played?: PSNPlayedTitle
@@ -355,7 +377,7 @@ function normalizeGame(
       played?.concept?.id === undefined ? undefined : String(played.concept.id),
     titleId: played?.titleId,
     name: title.trophyTitleName || played?.name || "Unknown title",
-    iconUrl: title.trophyTitleIconUrl || played?.imageUrl || "",
+    iconUrl: gameIconUrl(title, played),
     platform: String(title.trophyTitlePlatform || played?.category || "Unknown"),
     service: played?.service,
     playCount: Number(played?.playCount) || 0,
@@ -407,17 +429,22 @@ export function normalizePlayStationGames(
   });
 
   for (const indexedPlayed of playedIndex.all) {
+    const played = indexedPlayed.played;
+    const hasAppActivity =
+      isAppPlatform(played.category || "") &&
+      (Number(played.playCount) > 0 ||
+        Boolean(played.firstPlayedDateTime) ||
+        Boolean(played.lastPlayedDateTime));
     if (
       matchedPlayed.has(indexedPlayed) ||
-      indexedPlayed.durationSeconds <= 0
+      (indexedPlayed.durationSeconds <= 0 && !hasAppActivity)
     ) {
       continue;
     }
-    const played = indexedPlayed.played;
     const emptyTitle: PSNTrophyTitle = {
       npCommunicationId: played.titleId,
       trophyTitleName: played.name || played.localizedName || "Unknown title",
-      trophyTitleIconUrl: played.imageUrl || played.localizedImageUrl || "",
+      trophyTitleIconUrl: preferredPlayedIconUrl(played),
       trophyTitlePlatform: played.category,
       progress: 0,
       definedTrophies: {},

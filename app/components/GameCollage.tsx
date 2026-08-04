@@ -6,7 +6,7 @@ import { toPng } from "html-to-image";
 import type { PlayStationGame } from "@/app/types/playstation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatDuration, gameCoverAspectClass, gameCoverImageHeightClass, gameCoverObjectFit, isPlayed, platformLabel } from "@/lib/playstation";
+import { formatDuration, isPlayed } from "@/lib/playstation";
 import PlatformBadge from "@/app/components/PlatformBadge";
 
 interface GameCollageProps {
@@ -583,12 +583,12 @@ export default function GameCollage({
               key={game.id}
               className="group relative flex flex-col items-center justify-center min-w-0 rounded-xl overflow-hidden bg-muted"
             >
-              <div className={`${gameCoverAspectClass(game.platform)} relative w-full overflow-hidden bg-muted`}>
+              <div className="aspect-square relative w-full overflow-hidden bg-muted">
                 <img
                   src={game.iconUrl ? getExportImageUrl(game.iconUrl) : EXPORT_PLACEHOLDER}
                   alt={game.name}
                   crossOrigin="anonymous"
-                  className={`w-full ${gameCoverImageHeightClass(game.platform)} ${gameCoverObjectFit(game.platform)} transition-transform group-hover:scale-105`}
+                  className="w-full h-full object-cover transition-transform group-hover:scale-105"
                   loading="eager"
                   onError={(event) => handleImageError(event, game.iconUrl || "")}
                 />

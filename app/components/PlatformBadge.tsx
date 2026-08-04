@@ -2,7 +2,31 @@
 
 import React from "react";
 import { Badge } from "@/components/ui/badge";
-import { platformLabel } from "@/lib/playstation";
+import { isAppPlatform, platformLabel } from "@/lib/playstation";
+
+export function AppIcon({ className = "h-3 w-auto" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 2048 1024"
+      className={className}
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-label="App"
+    >
+      <g
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="60"
+        strokeLinecap="butt"
+        strokeLinejoin="round"
+      >
+        <path d="M70 728 273 318c8-16 18-22 30-22s22 6 30 22l203 410M166 568h274" />
+        <path d="M640 728V296h325c132 0 205 54 205 135 0 83-73 137-205 137H640" />
+        <path d="M1280 728V296h395c132 0 205 54 205 135 0 83-73 137-205 137h-395" />
+      </g>
+    </svg>
+  );
+}
 
 export function PS4Icon({ className = "h-3 w-auto" }: { className?: string }) {
   return (
@@ -64,11 +88,15 @@ export default function PlatformBadge({
   badgeVariant = "secondary",
 }: PlatformBadgeProps) {
   const norm = String(platform || "").toLocaleLowerCase();
-  const isPs5 = norm.includes("ps5");
-  const isPs4 = !isPs5 && norm.includes("ps4");
-  const isPs3 = !isPs5 && !isPs4 && norm.includes("ps3");
+  const isApp = isAppPlatform(platform);
+  const isPs5 = !isApp && norm.includes("ps5");
+  const isPs4 = !isApp && !isPs5 && norm.includes("ps4");
+  const isPs3 = !isApp && !isPs5 && !isPs4 && norm.includes("ps3");
 
   if (variant === "inline") {
+    if (isApp) {
+      return <AppIcon className={className || "h-3.5 w-auto inline-block align-middle"} />;
+    }
     if (isPs5) {
       return <PS5Icon className={className || "h-3.5 w-auto inline-block align-middle"} />;
     }
@@ -83,7 +111,9 @@ export default function PlatformBadge({
 
   return (
     <Badge variant={badgeVariant} className={`inline-flex items-center px-1.5 py-0.5 ${className}`}>
-      {isPs5 ? (
+      {isApp ? (
+        <AppIcon className="h-3 w-auto fill-current" />
+      ) : isPs5 ? (
         <PS5Icon className="h-3 w-auto fill-current" />
       ) : isPs4 ? (
         <PS4Icon className="h-3 w-auto fill-current" />

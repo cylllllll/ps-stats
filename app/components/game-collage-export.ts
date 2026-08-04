@@ -405,7 +405,6 @@ export async function renderGameCollagePoster({
     (total, game) => total + game.playtimeSeconds,
     0
   );
-  const yearLabel = periodLabel.match(/\d{4}/)?.[0];
   const gridHeight =
     rowCount * GRID_ROW_HEIGHT + Math.max(0, rowCount - 1) * GRID_GAP;
   const posterHeight =
@@ -467,30 +466,28 @@ export async function renderGameCollagePoster({
   );
 
   const rightX = POSTER_WIDTH - POSTER_PADDING;
-  const countGradient = context.createLinearGradient(rightX - 100, 0, rightX, 0);
-  countGradient.addColorStop(0, "#60a5fa");
-  countGradient.addColorStop(1, "#818cf8");
+  const periodGradient = context.createLinearGradient(rightX - 280, 0, rightX, 0);
+  periodGradient.addColorStop(0, "#60a5fa");
+  periodGradient.addColorStop(1, "#818cf8");
+  const exportPeriodLabel = periodLabel.replace(/\s*[·•]\s*/g, " • ");
   context.textAlign = "right";
-  context.fillStyle = countGradient;
-  context.font = `900 30px ${SYSTEM_FONT}`;
-  context.fillText(String(games.length), rightX, POSTER_PADDING + 28);
-  context.fillStyle = "rgba(255, 255, 255, 0.4)";
-  context.font = `600 11px ${SYSTEM_FONT}`;
+  context.fillStyle = periodGradient;
+  context.font = `900 36px ${SYSTEM_FONT}`;
   context.fillText(
-    fitText(context, periodLabel.toUpperCase(), 280),
+    fitText(context, exportPeriodLabel, 280),
     rightX,
-    POSTER_PADDING + 50
+    POSTER_PADDING + 39
   );
   context.fillStyle = "rgba(255, 255, 255, 0.6)";
-  context.font = `600 11px ${SYSTEM_FONT}`;
+  context.font = `600 14px ${SYSTEM_FONT}`;
   context.fillText(
     fitText(
       context,
-      `${yearLabel ? `${yearLabel} ` : ""}游戏时间 · ${formatDuration(totalPlaytimeSeconds)}`,
+      `${formatDuration(totalPlaytimeSeconds)} • ${games.length} 款游戏`,
       280
     ),
     rightX,
-    POSTER_PADDING + 69
+    POSTER_PADDING + 71
   );
 
   const dividerY = POSTER_PADDING + 80;

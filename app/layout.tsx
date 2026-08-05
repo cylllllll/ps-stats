@@ -11,11 +11,11 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "PS Stats - PlayStation Gaming Analytics",
+  title: "PS Stats",
   description: "Explore your PlayStation gaming journey, trophy progress, playtime, and gaming habits.",
   icons: {
-    icon: "/favicon.ico",
-    apple: "/favicon.ico",
+    icon: "/playstation-logo.svg",
+    apple: "/apple-touch-icon.png",
   },
 };
 
